@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 (2026-10-07)
+
+- I1: Checksum-validated IBAN and VIN replacements, Canadian bank account groups, IPv4/IPv6, MAC, GPS coordinates and social handles. Replaced values enter originals/secrets for leak checking. IPv4 version/partial/out-of-range values are guarded.
+- I2: Six typed yellow review flags with final-output offsets: name, id, file, age, url and zip. Tokens, dates, times, full phones and currency amounts are guarded; overlapping flags resolve by specific pattern before generic ID/name. ZIP replacement remains in address context; ambiguous state/ZIP references are flagged.
+- V1-V5: Inline yellow items beside blue tokens and red confirmed leaks. Real accessible buttons offer thread-only Replace, persisted Always remove (also Shift-click Replace), and thread-only Keep. All occurrences replace together; Keep survives reruns; Clear erases both temporary lists. Counter/Next focuses Replace and wraps; controls and hidden labels are excluded from both normal and selected-text copying.
+- A1-A3: Single Accept-then-Copy button with yellow count or red leak count; acceptance keeps outstanding yellow text and acknowledges leaks. Copy always uses result.text. Copy briefly reads Copied; stale text invalidates the result; changed output or new flags/leaks resets acceptance. Review panel is closed on each new result and lists flags/leaks with focus navigation; legacy advisories remain visible there.
+- H1-H2: Updated section-4 help, two new native popovers, and help sections covering automatic identifiers, yellow types, limits, review/acceptance and temporary versus saved preferences. Old copy-anyway/per-name controls removed.
+- T1: Generated PERSON tokens renumber after all replacements in final first-appearance order; explicit labels/ME remain unchanged and reserved labels remain protected. Fully excluded people are removed from the replacement map.
+- T2: Symbolic/group mailbox display names before angle-bracket email addresses become ORG tokens when no person is parsed; decorated people retain existing behaviour.
+- Testing fix: Remove highlighted text preserves the page scroll and output-pane scroll instead of jumping to the replacement map.
+- Demo: Clearly fictional values cover all new automatic identifier categories and yellow types, with no confirmed leaks.
+- Product footer: Adjacent local landing-page inspection preview, draft terms and draft privacy links. No deployment or public product release. Single-file scrubber runtime and original CSP remain unchanged.
+
+Node acceptance/regression tests and installed browser automation are recorded in tests/V05-CHECKLIST.md. Exact real threads were not provided and remain unverified. The separate manual checklist distinguishes automated checks from human checks.
+
 ## 0.4.0 (2026-10-07)
 
 - P1: One first-appearance sequence for numbered and labelled people, with collision-safe tokens.

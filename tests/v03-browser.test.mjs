@@ -15,22 +15,22 @@ try {
  // No demo writes, even when removing candidates, adding rows, changing terms or forgetting.
  const before=await page.evaluate(()=>localStorage.getItem('email-scrub.preferences.v3'));
  await page.click('#demo');assert.equal(await page.textContent('#results-title'),'4. Check and copy (demo)');
- assert((await page.textContent('#possible-names')).includes('Andre'));assert(!(await page.isDisabled('#copy')));
- await page.getByRole('button',{name:'Remove possible name Andre',exact:true}).click();
- assert(!(await page.textContent('#possible-names')).includes('Andre'));
+ assert((await page.textContent('#review-list')).includes('Andre'));assert(!(await page.isDisabled('#copy')));
+ await page.getByRole('button',{name:'Always remove Andre',exact:true}).click();
+ assert(!(await page.textContent('#review-list')).includes('Andre'));
  await page.click('#add-person');await page.fill('#kill','demo only');await page.click('#go');
  assert.equal(await page.evaluate(()=>localStorage.getItem('email-scrub.preferences.v3')),before);
  await page.fill('#input','Tell Andre she is the POC.'); // leaves demo, restores preferences
  assert.equal(await page.inputValue('#kill'),'legacy term'); assert(await page.isHidden('#res'));
  await page.click('#go');assert.equal(await page.textContent('#results-title'),'4. Check and copy');
- await page.getByRole('button',{name:'Remove possible name Andre',exact:true}).click();
- assert((await page.textContent('#out')).includes('<EXCLUDED-3>'));
+ await page.getByRole('button',{name:'Always remove Andre',exact:true}).click();
+ assert((await page.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('<EXCLUDED-3>'));
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('email-scrub.preferences.v3')).nextExcluded),4);
  // Forget a middle item and then add another; IDs are never reused, including across reload.
  await page.locator('details').filter({has:page.locator('#saved-terms')}).locator('summary').click();
  await page.locator('#saved-terms button').nth(1).click();await page.reload();
  await page.fill('#input','Tell Alice to contact Andre.');await page.click('#go');
- await page.getByRole('button',{name:'Remove possible name Alice',exact:true}).click();
+ await page.getByRole('button',{name:'Always remove Alice',exact:true}).click();
  const prefs=await page.evaluate(()=>JSON.parse(localStorage.getItem('email-scrub.preferences.v3')));
  assert.deepEqual(prefs.excluded.map(t=>t.n),[1,3,4]);
  // Demo Clear exits without overwriting the saved settings.

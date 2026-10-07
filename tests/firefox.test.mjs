@@ -25,15 +25,15 @@ try {
  const before=await js("return localStorage.getItem('email-scrub.preferences.v3')");
  assert.deepEqual(JSON.parse(before).excluded,[{text:'first',n:1},{text:'a longer second',n:2}]);
  await actualClick('#demo');assert.equal(await js("return document.getElementById('results-title').textContent"),'4. Check and copy (demo)');
- assert((await js("return document.getElementById('possible-names').textContent")).includes('Andre'));
+ assert((await js("return document.getElementById('review-list').textContent")).includes('Andre'));
  assert.equal(await js("return document.getElementById('copy').disabled"),false);
- await actualClick('[aria-label="Remove possible name Andre"]');assert(!(await js("return document.getElementById('possible-names').textContent")).includes('Andre'));
+ await actualClick('[aria-label="Always remove Andre"]');assert(!(await js("return document.getElementById('review-list').textContent")).includes('Andre'));
  await click('#add-person');await js("document.getElementById('kill').value='demo only';document.getElementById('kill').dispatchEvent(new Event('input',{bubbles:true}));");await click('#go');
  assert.equal(await js("return localStorage.getItem('email-scrub.preferences.v3')"),before);
  await js("document.getElementById('input').value='Tell Andre she is the POC.';document.getElementById('input').dispatchEvent(new Event('input',{bubbles:true}));");
  assert.equal(await js("return document.getElementById('kill').value"),'legacy term');
- await click('#go');await actualClick('[aria-label="Remove possible name Andre"]');
- assert((await js("return document.getElementById('out').textContent")).includes('<EXCLUDED-3>'));
+ await click('#go');await actualClick('[aria-label="Always remove Andre"]');
+ assert((await js("return (()=>{const c=document.getElementById('out').cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})()")).includes('<EXCLUDED-3>'));
  await http(path+'/refresh',{});
  assert.equal(await js("return document.getElementById('input').value"),'');
  assert.equal(await js("return JSON.parse(localStorage.getItem('email-scrub.preferences.v3')).nextExcluded"),4);
@@ -49,11 +49,11 @@ try {
  await js("document.getElementById('saved-people-panel').open=true;document.getElementById('saved-search').value='jon';document.getElementById('saved-search').dispatchEvent(new Event('input',{bubbles:true}));");
  assert((await js("return document.getElementById('saved-people').textContent")).includes('Jónes'));
  await js("document.getElementById('input').value='Fiction Sender told Fiction to ask Jones.';document.getElementById('input').dispatchEvent(new Event('input',{bubbles:true}));");await click('#go');
- assert((await js("return document.getElementById('out').textContent")).includes('<ME> told <ME> to ask <GRIEVOR>'));
+ assert((await js("return (()=>{const c=document.getElementById('out').cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})()")).includes('<ME> told <ME> to ask <GRIEVOR>'));
  assert.match(await js("return JSON.parse(localStorage.getItem('email-scrub.preferences.v3')).saved[0].lastUsed"),/^\d{4}-\d{2}-\d{2}$/);
  await js("const p=JSON.parse(localStorage.getItem('email-scrub.preferences.v3'));p.saved[0].lastUsed='2026-10-01';localStorage.setItem('email-scrub.preferences.v3',JSON.stringify(p));");await http(path+'/refresh',{});await click('#add-person');
  await js("document.querySelector('#roles .names').value='Jones';document.querySelector('#roles .labin').value='THREAD';document.getElementById('input').value='Jones spoke.';");await click('#go');
- assert((await js("return document.getElementById('out').textContent")).includes('<THREAD>'));assert.equal(await js("return JSON.parse(localStorage.getItem('email-scrub.preferences.v3')).saved[0].lastUsed"),'2026-10-01');
+ assert((await js("return (()=>{const c=document.getElementById('out').cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})()")).includes('<THREAD>'));assert.equal(await js("return JSON.parse(localStorage.getItem('email-scrub.preferences.v3')).saved[0].lastUsed"),'2026-10-01');
  await click('#demo');assert.equal(await js("return document.getElementById('forget').disabled"),true);
  await js("document.getElementById('saved-people-panel').open=true;document.getElementById('saved-search').value='jon';document.getElementById('saved-search').dispatchEvent(new Event('input',{bubbles:true}));");
  for(let i=1;i<=5;i++) {
@@ -77,9 +77,10 @@ try {
  await click('#clear');assert.equal(await js("return document.getElementById('results-title').textContent"),'4. Check and copy');
  const fixture=fs.readFileSync(new URL('./engine.test.js',import.meta.url),'utf8').match(/const OUTLOOK_EN = `([\s\S]*?)`;/)[1];
  await js(`document.getElementById('input').value=${JSON.stringify(fixture)};document.getElementById('input').dispatchEvent(new Event('input',{bubbles:true}));`);await click('#go');
- const text=await js("return document.getElementById('out').textContent");assert(text.includes('<PHONE>')&&text.includes('<PERSON-1>'));
+ const text=await js("return (()=>{const c=document.getElementById('out').cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})()");assert(text.includes('<PHONE>')&&text.includes('<PERSON-1>'));
  for(const secret of ['Whitfield','Adaeze','harbourline.ca'])assert(!text.includes(secret));
  // Clipboard action can be restricted on file://; UI must report either success or its manual fallback.
+ if((await js("return document.getElementById('copy').textContent")).startsWith('Accept'))await actualClick('#copy');
  await actualClick('#copy');
  assert((await js("return document.getElementById('copied').textContent")).match(/Copied|Copy was blocked/));
  assert.equal(requests.length,0,requests.join('\n'));
@@ -89,5 +90,5 @@ try {
  await actualClick('#dismiss-notice');await http(path+'/refresh',{});assert.equal(await js("return document.getElementById('migration-notice').hidden"),true);
  await click('#demo');await click('#clear');assert.equal(await js("return document.getElementById('forget').disabled"),false);await click('#forget');assert.equal(await js("return localStorage.getItem('email-scrub.preferences.v3')"),null);
  assert.equal(requests.length,0,requests.join('\n'));
- console.log('PASS installed Firefox '+session.capabilities.browserVersion+': file:// scrub/demo/help, preferences migration/isolation, candidate Remove, monotonic IDs, popover mouse/keyboard/touch/outside/Escape, dialog, copy feedback, zero page network requests (BiDi)');
+ console.log('PASS installed Firefox '+session.capabilities.browserVersion+': file:// scrub/demo/help, preferences migration/isolation, candidate Always remove, monotonic IDs, popover mouse/keyboard/touch/outside/Escape, dialog, copy feedback, zero page network requests (BiDi)');
 } finally {ws.close();await http(path,undefined,'DELETE');}

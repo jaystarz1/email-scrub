@@ -33,6 +33,7 @@ button:disabled{opacity:.45;cursor:default}
 .status{font-weight:600}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .alarm{border:2px solid var(--bad);background:var(--alarm);border-radius:6px;padding:10px 12px;margin:0 0 10px}
 pre#out{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:12px;max-height:520px;overflow:auto;font:13px/1.5 Consolas,ui-monospace,monospace;margin:10px 0}
+.review-controls,.sr-only{user-select:none;-webkit-user-select:none}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.review{background:#ffe39a;color:#382900;border-bottom:2px dotted #715100}.review-controls{display:inline-flex;gap:3px;margin:0 3px;vertical-align:middle}.review-controls button{font:12px/1.4 system-ui;padding:2px 5px;background:#fff;color:#382900;border:1px solid #715100}.leak-mark{background:var(--alarm);color:var(--bad);border-bottom:2px solid var(--bad)}button.danger{background:var(--alarm);color:var(--bad);border:2px solid var(--bad)}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 pre#out .t{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 2px}
 ul.people{margin:4px 0 0;padding-left:18px}ul.people li{margin:2px 0}
 ul.people code{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 3px}
@@ -84,23 +85,25 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 <section class="card" id="res" hidden>
   <h2><span id="results-title">4. Check and copy</span> <button class="help-button" popovertarget="help-4" aria-label="Help for section 4">?</button></h2>
   <div class="chips" id="counts"></div>
-  <div id="leak"></div><div id="possible-names" class="warn" role="status"></div>
+  <div class="bar"><span id="review-counter" role="status">Nothing to review</span><button id="review-next">Next ›</button><button class="help-button" popovertarget="help-review" aria-label="Help for review navigation">?</button></div>
+  <details id="review-panel"><summary id="review-summary">Review items (0)</summary><ul id="review-list"></ul><p id="review-advice" class="warn"></p></details>
   <details id="people-box"><summary id="people-sum">People found</summary><ul class="people" id="people"></ul></details>
   <p class="sub">Highlight any remaining private text below, then remove it. All matching occurrences are replaced, and the exclusion is remembered for future threads. Select original text only, without placeholders.</p>
   <div class="bar"><button id="exclude" disabled>Remove highlighted text</button><span id="selection-status" role="status"></span></div>
   <pre id="out" tabindex="0" aria-label="Scrubbed text: select text to exclude it"></pre>
-  <div class="bar"><button id="copy" class="primary">Copy</button><span id="copied" class="status ok" role="status"></span></div>
+  <div class="bar"><button id="copy" class="primary">Copy</button><button class="help-button" popovertarget="help-copy" aria-label="Help for Accept and Copy">?</button><span id="copied" class="status ok" role="status"></span></div>
   <p class="sub" style="margin:10px 0 0">The AI's reply will use the same placeholders. Swap the real names back in as you paste it into your email.</p>
 </section>
 
-<footer>Version <span id="ver"></span> · Runs entirely in your browser · Blocked from the network by its own security policy · Apache-2.0 licence</footer>
+<footer>Version <span id="ver"></span> · Runs entirely in your browser · Blocked from the network by its own security policy · Apache-2.0 licence<br><a href="email-scrub-landing.html">Product page (preview)</a> · <a href="email-scrub-landing.html#terms">Terms (draft)</a> · <a href="email-scrub-landing.html#privacy">Privacy (draft)</a></footer>
 
-<div id="help-1" popover>Paste the complete thread, or open a plain text file. Try a sample uses fictional data without changing your saved preferences.</div><div id="help-2" popover>Set Me once. Add people for this thread with an optional label, or Save them for every scrub. Saved people can be searched, edited or removed. Unlabelled people are numbered by first appearance.</div><div id="help-3" popover>Enter one identifying term per line. Highlighted exclusions are remembered separately; Forget removes them from future runs.</div><div id="help-4" popover>Review the result and any warnings before copying. Highlight remaining private text or use Remove beside a possible name; warnings alone do not block Copy.</div><div id="help-5" popover>This note asks the AI to preserve placeholders in its reply. It does not guarantee that the AI will follow the instruction.</div><dialog id="help-dialog" aria-labelledby="help-title"><h2 id="help-title">Help: what to check</h2>
-<p><b>What is caught automatically:</b> names in headers, greetings and sign-offs; emails; phones; dates; addresses; ID numbers; links; confidentiality notices.</p>
-<p><b>What is not reliably caught:</b> single names in prose, nicknames, and context that identifies someone without naming them. Possible-name warnings cover some of this; read the full result.</p>
+<div id="help-1" popover>Paste the complete thread, or open a plain text file. Try a sample uses fictional data without changing your saved preferences.</div><div id="help-2" popover>Set Me once. Add people for this thread with an optional label, or Save them for every scrub. Saved people can be searched, edited or removed. Unlabelled people are numbered by first appearance.</div><div id="help-3" popover>Enter one identifying term per line. Highlighted exclusions are remembered separately; Forget removes them from future runs.</div><div id="help-4" popover>Blue text has been replaced. Yellow text might be private: replace it or keep it. Copy takes the clean text only.</div><div id="help-5" popover>This note asks the AI to preserve placeholders in its reply. It does not guarantee that the AI will follow the instruction.</div><div id="help-review" popover>Next jumps to the next yellow item. Replace hides it in this thread only; Always remove saves it for every thread.</div><div id="help-copy" popover>Accept means you've looked at what's left. The button turns into Copy, and it resets if the text changes.</div><dialog id="help-dialog" aria-labelledby="help-title"><h2 id="help-title">Help: what to check</h2>
+<p><b>What is caught automatically:</b> names in headers, greetings and sign-offs; emails; phones; dates; addresses; labelled IDs, SINs and card numbers with a valid checksum, SSNs; links; confidentiality notices; valid IBANs; Canadian bank account numbers; IP and MAC addresses; valid VINs; GPS coordinates; social handles.</p>
+<p><b>What is flagged for you:</b> yellow highlights mark possible names, ID-like numbers, file names, ages, profile links and ZIP codes. Organisation-specific numbers, such as employee or service numbers, are flagged rather than replaced because the tool cannot know every format.</p>
+<p><b>What is not reliably caught:</b> single names in prose, nicknames, and context that identifies someone without naming them. Yellow highlights cover some of this. You are responsible for the final check. Scroll the result before you copy.</p>
 <p><b>People versus Always remove:</b> Me becomes &lt;ME&gt;. This thread and Saved people use an optional label or &lt;PERSON-n&gt;. Me is matched first; this-thread names take precedence over the same saved name forms. Always remove handles project names, organisations or any other identifying terms, one per line.</p>
-<p><b>The leak check:</b> it checks whether details selected for removal still appear. Passing it is not proof of anonymity. “I checked: copy anyway” lets you copy despite a known match; review why it remains first.</p>
-<p><b>Preferences:</b> only Me, Saved people, Always remove terms and highlighted exclusions are stored in this browser’s local storage and are not encrypted. This-thread people, threads, results and replacement maps are not saved. Saved people show only the date last used, updated when a name is actually replaced. Clear current thread removes its people but keeps Me and Saved people. Save moves a row into Saved people. Search ignores case and accents. Forget is disabled during the sample; leave the sample first. Use Forget saved people and exclusions to erase preferences. If this computer is shared, use Forget when you're done.</p>
+<p><b>Reviewing the result:</b> Replace hides every matching occurrence in this thread only. Always remove saves the item for future threads. Keep leaves the text unchanged and removes its yellow highlight for this thread. The review counter shows what remains; Next focuses the next Replace button and wraps at the end. Accept keeps the remaining yellow items and acknowledges any red leaks, then turns into Copy; a second click copies. Acceptance resets when the copy text changes or new flags or leaks appear, but Keep alone does not reset it. Red means a detail you asked to remove still appears. Review items lists the yellow items and confirmed leaks. Passing a leak check is not proof of anonymity.</p>
+<p><b>Preferences:</b> only Me, Saved people, Always remove terms and highlighted exclusions are stored in this browser’s local storage and are not encrypted. Always remove saves an item; Replace and Keep apply to the current thread only and are not stored. This-thread people, threads, results and replacement maps are not saved. Saved people show only the date last used, updated when a name is actually replaced. Clear current thread removes its people, temporary exclusions and Keep list but keeps Me and Saved people. Save moves a row into Saved people. Search ignores case and accents. Forget is disabled during the sample; leave the sample first. Use Forget saved people and exclusions to erase preferences. If this computer is shared, use Forget when you're done.</p>
 <p><b>Check it yourself:</b> open the browser’s developer tools, go to the Network tab, run a scrub, and confirm nothing is sent.</p>
 <p><b>Using the AI’s reply:</b> placeholders come back in the reply; swap the real names in before sending.</p>
 <button id="help-close" type="button">Close help</button></dialog>
@@ -294,6 +297,60 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
   var LABELLED_ID = /\b((?:Account|Acct|Policy|Claim|Member|Employee|Customer|Client|Case|File|Matter|Patient|Student|Licen[cs]e|Passport|Health card|Dossier|Compte|Police|Réclamation|Matricule)\s*(?:no\.?|number|#|n[o°]\.?|numéro)?\s*[:#]?\s*)([A-Z0-9][A-Z0-9-]{3,})\b/giu;
   function luhn(d) { var s = 0; for (var i = 0; i < d.length; i++) { var x = +d[d.length - 1 - i]; if (i % 2) { x *= 2; if (x > 9) x -= 9; } s += x; } return s % 10 === 0; }
 
+  function ibanOK(value) {
+    var s = value.replace(/[ \t]/g, '').toUpperCase();
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s)) return false;
+    var rotated = s.slice(4) + s.slice(0, 4), rem = 0;
+    for (var ch of rotated) for (var d of /[A-Z]/.test(ch) ? String(ch.charCodeAt(0) - 55) : ch) rem = (rem * 10 + +d) % 97;
+    return rem === 1;
+  }
+  function vinOK(s) {
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/i.test(s)) return false;
+    var letters = 'ABCDEFGHJKLMNPRSTUVWXYZ', values = '12345678123457923456789', weights = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2], sum = 0;
+    s = s.toUpperCase();
+    for (var i = 0; i < 17; i++) sum += (/\d/.test(s[i]) ? +s[i] : +values[letters.indexOf(s[i])]) * weights[i];
+    return s[8] === (sum % 11 === 10 ? 'X' : String(sum % 11));
+  }
+  function ipv4OK(s) { return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(s) && s.split('.').every(function (n) { return +n <= 255; }); }
+  function ipv6OK(s) {
+    if (!s.includes(':') || /::.*::/.test(s)) return false;
+    if (s.includes('.')) { var at = s.lastIndexOf(':'); if (!ipv4OK(s.slice(at + 1))) return false; s = s.slice(0, at + 1) + '0:0'; }
+    var compressed = s.includes('::'), sides = s.split('::');
+    var groups = sides.flatMap(function (part) { return part ? part.split(':') : []; });
+    return groups.every(function (g) { return /^[a-f0-9]{1,4}$/i.test(g); }) && (compressed ? groups.length < 8 : groups.length === 8);
+  }
+  // Review offsets are measured on the final output, never on a token-stripped copy.
+  function reviewFlags(text, possibleNames, kept, leaks) {
+    var masked = text.replace(TOKEN_RE, function (t) { return ' '.repeat(t.length); }), found = [];
+    var keep = new Set((kept || []).map(fold));
+    var protectedRanges = [];
+    (leaks || []).forEach(function (secret) {
+      var re = new RegExp(termPattern(secret), 'giu'), m;
+      while ((m = re.exec(masked))) protectedRanges.push([m.index, m.index + m[0].length]);
+    });
+    function collect(kind, re, valid) {
+      var m;
+      while ((m = re.exec(masked))) {
+        var start = m.index, end = start + m[0].length;
+        if (keep.has(fold(m[0])) || valid && !valid(m, masked) || protectedRanges.some(function (r) { return start < r[1] && end > r[0]; }) || found.some(function (f) { return start < f.end && end > f.start; })) continue;
+        found.push({ id: kind + '-' + start + '-' + end, kind: kind, text: text.slice(start, end), start: start, end: end });
+      }
+    }
+    collect('file', /(?<![\p{L}\p{N}_])[\p{L}\p{N}_.'’-]+\.(?:pdf|docx?|xlsx?|pptx|msg|eml|txt|jpg|png|zip)\b/giu);
+    collect('age', /\b(?:\d{1,3}-year-old|aged[ \t]+\d{1,3}|age[ \t]+\d{1,3}|âgé(?:e)?[ \t]+de[ \t]+\d{1,3}[ \t]+ans|\d{1,3}[ \t]+ans)\b/giu);
+    collect('url', /\b(?:linkedin\.com\/in|facebook\.com|instagram\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/gi);
+    collect('zip', ZIP_US);
+    collect('id', /(?<![\p{L}\p{N}_])(?=[A-Z0-9]*\d)[A-Z0-9]+(?:[ -]+[A-Z0-9]*\d[A-Z0-9]*)*(?![\p{L}\p{N}_])/giu, function (m, source) {
+      var compact = m[0].replace(/[ -]/g, ''), before = source.slice(0, m.index), after = source.slice(m.index + m[0].length);
+      if (!/^\d{5,}$/.test(compact) && !(/\d/.test(compact) && /[a-z]/i.test(compact) && compact.length >= 6)) return false;
+      if (/[$€£¥][ \t]*[\d,.]*$/.test(before) || /\d[:,.]$/.test(before) || /^[:,.]\d/.test(after)) return false;
+      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(m[0]) || /^\d{1,2}:\d{2}/.test(m[0]) || /^\d{3}[ -]\d{3}[ -]\d{4}$/.test(m[0])) return false;
+      return true;
+    });
+    (possibleNames || []).slice().sort(function (a,b) { return b.length-a.length; }).forEach(function (name) { collect('name', new RegExp(termPattern(name), 'giu')); });
+    return found.sort(function (a,b) { return a.start-b.start; });
+  }
+
   // Dates. Same calendar day -> same token, numbered in order of first appearance.
   var MON = { jan: 1, feb: 2, fev: 2, mar: 3, apr: 4, avr: 4, may: 5, mai: 5, jun: 6, jui: 6, jul: 7, aug: 8, aou: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   var MONTHS_RE = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|janv(?:ier)?|f[ée]v(?:r(?:ier)?)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|d[ée]c(?:embre)?)\\.?';
@@ -351,9 +408,21 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     text = text.replace(HEADER, function (whole, label, value) {
       var cleaned = value.replace(/([^;<>\n]+)(?=\s*<[^>]*@[^>]*>|$)/g, function (display) {
         var d = /(@[^<>]+|\([^)]*\)(?:.*)|\[[^\]]*\](?:.*)|\|.*)$/.exec(display);
-        if (!d) return display;
+        if (!d) {
+          var plain = display.trim().replace(/^"|"$/g, '');
+          if (!plain || parseName(plain) || !/<[^>]*@[^>]*>/.test(value) || /@/.test(plain)) return display;
+          if (!decorations.has(plain)) decorations.set(plain, '<ORG-' + (decorations.size + 1) + '>');
+          originals.push(plain); return (display.match(/^\s*/) || [''])[0] + decorations.get(plain) + ' ';
+        }
         var name = display.slice(0, d.index).trim().replace(/^"|"$/g, '');
-        if (!parseName(name)) return display;
+        if (!parseName(name)) {
+          // Any display string before an angle-bracket mailbox is identifying metadata.
+          if (!/<[^>]*@[^>]*>/.test(value)) return display;
+          var group = display.trim().replace(/^"|"$/g, '');
+          if (!group || /^<ORG-/.test(group)) return display;
+          if (!decorations.has(group)) decorations.set(group, '<ORG-' + (decorations.size + 1) + '>');
+          originals.push(group); return (display.match(/^\s*/) || [''])[0] + decorations.get(group) + ' ';
+        }
         var decoration = d[0].trim().replace(/"$/, '');
         if (!decorations.has(decoration)) decorations.set(decoration, '<ORG-' + (decorations.size + 1) + '>');
         originals.push(decoration);
@@ -501,7 +570,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     text = text.replace(/\[mailto:[^\]]*\]/gi, '').replace(/<\s*([^<>\s]+@[^<>\s]+)\s*>/g, ' $1');   // <a@b.c> -> a@b.c, so it becomes one <EMAIL>
     text = outside(text, EMAIL, function (e) { counts.emails++; originals.push(e); return '<EMAIL>'; });
     text = text.replace(/ {2,}<EMAIL>/g, ' <EMAIL>');
-    text = outside(text, URL, function (u) { counts.urls++; return '<URL>'; });
+    text = outside(text, URL, function (u) { counts.urls++; originals.push(u); return '<URL>'; });
 
     // 5. the kill list, then role names the user typed (longest first)
     var killTokens = [], exclusionPatterns = new Map();
@@ -534,6 +603,22 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     });
 
     // 6. structured identifiers
+    function identifier(re, token, valid) {
+      text = outside(text, re, function (value, offset, source) {
+        if (valid && !valid(value, offset, source)) return value;
+        counts.ids++; originals.push(value); return token;
+      });
+    }
+    identifier(/(?<![A-Z0-9])(?:[A-Z]{2}\d{2})(?:[ \t]?[A-Z0-9]){11,30}(?![A-Z0-9])/g, '<IBAN>', ibanOK);
+    identifier(/(?<![\p{L}\p{N}])\d{5}[ -]\d{3}[ -]\d{7,12}(?![\p{L}\p{N}])/gu, '<BANK>');
+    identifier(/(?<![\p{L}\p{N}:.-])(?:[A-F0-9]{2}:){5}[A-F0-9]{2}(?![\p{L}\p{N}:.-])|(?<![\p{L}\p{N}:.-])(?:[A-F0-9]{2}-){5}[A-F0-9]{2}(?![\p{L}\p{N}:.-])/giu, '<MAC>');
+    identifier(/(?<![\p{L}\p{N}:])[a-f0-9:]*(?::[a-f0-9:.]*)(?![\p{L}\p{N}:])/giu, '<IP>', ipv6OK);
+    identifier(/(?<![\p{L}\p{N}.])\d{1,3}(?:\.\d{1,3}){3}(?![\p{L}\p{N}.])/gu, '<IP>', function (value, offset, source) {
+      return ipv4OK(value) && !/(?:version|ver\.?|v)[ \t]*$/i.test(source.slice(0,offset));
+    });
+    identifier(/(?<![\p{L}\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\p{L}\p{N}])/giu, '<VIN>', vinOK);
+    identifier(/(?<![\p{L}\p{N}.])[-+]?\d{1,2}\.\d{4,}[ \t]*,[ \t]*[-+]?\d{1,3}\.\d{4,}(?![\p{L}\p{N}.])/gu, '<GPS>', function (v) { var pair=v.split(',').map(Number);return Math.abs(pair[0])<=90 && Math.abs(pair[1])<=180; });
+    identifier(/(?<![\p{L}\p{N}_.])@[A-Z0-9_][A-Z0-9_.]{1,29}(?![\p{L}\p{N}_.])/giu, '<HANDLE>', function (v) { return !/\.[a-z]{2,}$/i.test(v); });
     text = outside(text, LABELLED_ID, function (mm, label, id) { if (!/\d/.test(id)) return mm; counts.ids++; originals.push(id); return label + '<ID>'; });
     text = outside(text, SSN, function (s) { counts.ids++; originals.push(s); return '<SSN>'; });
     text = outside(text, SIN, function (s) { var d = s.replace(/\D/g, ''); if (!luhn(d)) return s; counts.ids++; originals.push(s); return '<SIN>'; });
@@ -542,7 +627,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     text = outside(text, PO_BOX, function () { counts.addresses++; return '<ADDRESS>'; });
     text = outside(text, ADDRESS, function (a) { counts.addresses++; originals.push(a); return '<ADDRESS>'; });
     text = outside(text, POSTAL_CA, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
-    text = outside(text, ZIP_US, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    text = text.replace(ZIP_US, function (p, off, whole) { var start=whole.lastIndexOf('\n',off)+1; var prev=whole.slice(0,start).trimEnd().split('\n').pop() || ''; if (!/<ADDRESS>/.test(whole.slice(start,off)) && !/<ADDRESS>/.test(prev)) return p; counts.postal++; originals.push(p); return '<POSTAL>'; });
     // City/province lines are private only in an address context, including quoted lines.
     var region = '(?:AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)';
     var city = new RegExp(NB + '(' + CAP + '(?:[ \t]+' + CAP + ')?),[ \t]*' + region + NA, 'gu');
@@ -556,7 +641,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       });
     }).join('\n');
     var dates = new Map();
-    text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; return dates.get(k); });
+    text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; originals.push(d); return dates.get(k); });
     // A day and month without a year ("the March 28 deadline") shares the token of the one full date it matches.
     text = outside(text, PARTIAL_DATE, function (d, mon1, day1, day2, mon2) {
       var mo = MON[fold(mon1 || mon2).slice(0, 3)], day = +(day1 || day2);
@@ -564,7 +649,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       var same = Array.from(dates.keys()).filter(function (k) { return new RegExp('^\\d{4}-' + mo + '-' + day + '$').test(k); });
       var k = same.length === 1 ? same[0] : mo + '-' + day;
       if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>');
-      counts.dates++; return dates.get(k);
+      counts.dates++; originals.push(d); return dates.get(k);
     });
 
     // 7. people: full names, "Last, First", surnames, then first names that belong to exactly one person
@@ -606,6 +691,18 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 
     // 8. tidy and the preservation note
     text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    // Only generated PERSON tokens are renumbered; explicit labels remain untouched.
+    var protectedLabels = new Set(roles.filter(function (r) { return r.names.length && configured.some(function (c) { return sanitizeLabel(c.label) === r.token.slice(1,-1); }); }).map(function (r) { return r.token; }));
+    var renumber = new Map(), number = 0;
+    text = text.replace(/<PERSON-\d+>/g, function (token) {
+      if (protectedLabels.has(token)) return token;
+      if (!renumber.has(token)) { var next; do { next = '<PERSON-' + (++number) + '>'; } while (protectedLabels.has(next)); renumber.set(token,next); }
+      return renumber.get(token);
+    });
+    people = people.filter(function(p){return !/^<PERSON-/.test(p.token) || protectedLabels.has(p.token) || renumber.has(p.token);});
+    people.forEach(function (p) { if (renumber.has(p.token)) p.token=renumber.get(p.token); });
+    roles = roles.filter(function(r){return !/^<PERSON-/.test(r.token) || protectedLabels.has(r.token) || renumber.has(r.token);});
+    roles.forEach(function (r) { if (renumber.has(r.token)) r.token=renumber.get(r.token); });
     if (opts.note !== false) text = 'Note: placeholders such as <PERSON-1> or <DATE-2> stand for removed details. Keep them exactly as written in any reply.\n\n' + text;
 
     // 9. leak check: nothing that was removed may still be in the output
@@ -636,7 +733,9 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     if (/@[\p{L}\p{N}-]+\.[\p{L}]{2,}/u.test(bare)) warnings.push('An "@" address fragment is still in the text.');
     if (/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(bare)) warnings.push('A number that looks like part of a phone number is still in the text.');
 
+    var flags = reviewFlags(text, possibleNames, opts.kept, leaks);
     return {
+      flags: flags,
       text: text,
       people: people.map(function (p) { return { token: p.token, names: [p.first, p.last].filter(Boolean).join(' '), emails: Array.from(p.emails), sources: Array.from(p.sources) }; }),
       roles: roles.map(function (r) { return { token: r.token, names: r.names }; }),
@@ -712,6 +811,19 @@ The March 28 deadline remains unchanged.
 Project Lantern is a fictional project.
 The internal note is sample-private.
 Account number: DEMO12345
+Fictional test IBAN: GB82 WEST 1234 5698 7654 32
+Fictional test bank: 12345-001-1234567
+Documentation IP: 192.0.2.42
+Documentation IPv6: 2001:db8::42
+Fictional MAC: 02:00:00:00:00:42
+Example VIN: 1M8GDM9AXKP042788
+Fictional coordinates: 45.0000, -75.0000
+Fictional handle: @sample_quill
+Ref A1B 234 567
+Attachment: Example_J_PAR_2024.pdf
+The fictional caller is aged 52.
+Profile: linkedin.com/in/fictional-sample
+US test region: NY 10001
 Demo SIN: 046 454 286
 Demo SSN: 123-45-6789
 Demo payment test card: 4111 1111 1111 1111
@@ -754,7 +866,18 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
 >> Cheers,
 >> Lyra Finch`;
 
-  var api = { sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.4.0' };
+  function leakRanges(text, leaks) {
+    var masked=text.replace(TOKEN_RE,function(t){return ' '.repeat(t.length);}), found=[];
+    (leaks || []).forEach(function(secret,i){var re=new RegExp(termPattern(secret),'giu'),m,j=0;while((m=re.exec(masked)))found.push({id:'leak-'+i+'-'+(j++),text:m[0],start:m.index,end:m.index+m[0].length});});
+    return found;
+  }
+  function reviewState(result, acknowledged) {
+    if (!acknowledged && result.leaks.length) return { label: 'Accept with ' + result.leaks.length + ' leak' + (result.leaks.length === 1 ? '' : 's'), accept: true, red: true };
+    if (result.flags.length) return { label: 'Accept (' + result.flags.length + ' to review)', accept: true, red: false };
+    return { label: 'Copy', accept: false, red: false };
+  }
+  function reviewSignature(result) { return JSON.stringify([result.text, result.flags.map(function (f) { return [f.kind,f.start,f.end,f.text]; }), result.leaks]); }
+  var api = { leakRanges: leakRanges, reviewState: reviewState, reviewSignature: reviewSignature, reviewFlags: reviewFlags, ibanOK: ibanOK, vinOK: vinOK, ipv6OK: ipv6OK, sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.5.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
@@ -763,6 +886,7 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
   var $ = function (id) { return document.getElementById(id); };
   $('js').textContent = ''; $('js').hidden = true; $('ver').textContent = EmailScrub.version;
   var STORE = 'email-scrub.preferences.v3', OLD_STORE = 'email-scrub.preferences.v2', V1_STORE = 'email-scrub.preferences.v1', NOTICE = 'email-scrub.exclusions-notice.v1';
+  var threadExcluded = [], kept = [], reviewIndex = -1;
   var last = null, acknowledged = false, excluded = [], selection = '', nextExcluded = 1, demo = false, beforeDemo = null, savedPeople = [], noticePending = false;
   function threadPeople() { return Array.from($('roles').children).map(function (row) { return { names: row.querySelector('.names').value, label: row.querySelector('.labin').value }; }); }
   function addRow(label, names) {
@@ -824,7 +948,7 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
   function demoControls() { var controls = EmailScrub.demoControls(demo); $('forget').disabled = controls.disabled; $('forget').title = controls.title; $('migration-notice').hidden = demo || !noticePending; }
   function leaveDemo() {
     if (!demo) return;
-    demo = false; applyPreferences(beforeDemo.prefs); $('roles').textContent = ''; beforeDemo.thread.forEach(function (r) { addRow(r.label, r.names); });
+    demo = false; threadExcluded=beforeDemo.threadExcluded;kept=beforeDemo.kept; applyPreferences(beforeDemo.prefs); $('roles').textContent = ''; beforeDemo.thread.forEach(function (r) { addRow(r.label, r.names); });
     beforeDemo = null; renderExcluded(); $('results-title').textContent = '4. Check and copy'; demoControls();
   }
   try {
@@ -844,20 +968,57 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
   $('saved-search').addEventListener('input', renderSaved);
   $('check-exclusions').onclick = function () { $('exclusions-panel').open = true; };
   $('dismiss-notice').onclick = function () { noticePending = false; $('migration-notice').hidden = true; try { localStorage.setItem(NOTICE, 'dismissed'); } catch (e) { $('storage-status').textContent = 'Browser storage is unavailable. This notice may return after reload.'; } };
-  function invalidate() { last = null; selection = ''; $('exclude').disabled = true; $('res').hidden = true; $('copied').textContent = ''; }
+  function invalidate() { acknowledged = false; last = null; selection = ''; $('exclude').disabled = true; $('res').hidden = true; $('copied').textContent = ''; }
   function changed() { save(); invalidate(); }
   $('roles').addEventListener('input', invalidate); $('me').addEventListener('input', changed); $('kill').addEventListener('input', changed);
   $('add-person').onclick = function () { addRow(); invalidate(); $('roles').lastChild.querySelector('.names').focus(); };
   function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
-  function paint(text) { $('out').innerHTML = esc(text).replace(/&lt;[A-Z][A-Z0-9-]*&gt;|\[Confidentiality notice removed\]/g, function (t) { return '<span class="t">' + t + '</span>'; }); }
+  function hiddenLabel(text) { var span=document.createElement('span');span.className='sr-only';span.textContent=text;return span; }
+  function focusReview(id) {
+    var item=document.getElementById(id);if (!item) return;
+    item.scrollIntoView({block:'nearest'});var control=item.querySelector('button');(control || item).focus({preventScroll:true});
+  }
+  function paint(text) {
+    var ranges = (last.flags || []).map(function (f) { return Object.assign({ type:'review' },f); });
+    var tokens=/<[A-Z][A-Z0-9-]*>|\[Confidentiality notice removed\]/g,m;
+    while ((m=tokens.exec(text))) ranges.push({type:'t',start:m.index,end:m.index+m[0].length,text:m[0]});
+    EmailScrub.leakRanges(text,last.leaks).forEach(function(f){if(!ranges.some(function(r){return f.start<r.end&&f.end>r.start;}))ranges.push(Object.assign({},f,{type:'leak-mark'}));});
+    ranges.sort(function(a,b){return a.start-b.start;});$('out').textContent='';var at=0;
+    ranges.forEach(function(r){
+      $('out').appendChild(document.createTextNode(text.slice(at,r.start)));
+      var span=document.createElement('span');span.className=r.type;span.id=r.id || '';span.tabIndex=-1;
+      span.appendChild(hiddenLabel(r.type==='t'?'replaced':r.type==='review'?'possible '+(r.kind==='id'?'ID':r.kind):'confirmed leak'));
+      var value=document.createElement('span');value.className='value';value.textContent=r.text;span.appendChild(value);
+      if(r.type==='review'){
+        var controls=document.createElement('span');controls.className='review-controls';
+        var replace=document.createElement('button');replace.textContent='✓';replace.setAttribute('aria-label','Replace '+r.text);replace.title='Replace in this thread (Shift-click to Always remove)';replace.onclick=function(e){addExclusion(r.text,!!e.shiftKey);};
+        var keep=document.createElement('button');keep.textContent='✗';keep.setAttribute('aria-label','Keep '+r.text);keep.title='Keep';keep.onclick=function(){kept.push(r.text);last.flags=last.flags.filter(function(f){return EmailScrub.fold(f.text)!==EmailScrub.fold(r.text);});refreshReview();};
+        var always=document.createElement('button');always.textContent='Always remove';always.setAttribute('aria-label','Always remove '+r.text);always.onclick=function(){addExclusion(r.text,true);};
+        [replace,keep,always].forEach(function(b){controls.appendChild(b);});span.appendChild(controls);
+      }
+      $('out').appendChild(span);at=r.end;
+    });$('out').appendChild(document.createTextNode(text.slice(at)));
+  }
+  function refreshReview() {
+    var scroll=$('out').scrollTop;paint(last.text);$('out').scrollTop=scroll;
+    $('review-counter').textContent=last.flags.length?last.flags.length+' to review':'Nothing to review';$('review-next').disabled=!last.flags.length;
+    $('review-advice').textContent=last.warnings.filter(function(w){return !/^Possible names still/.test(w);}).join(' ');
+    $('review-summary').textContent='Review items ('+(last.flags.length+last.leaks.length)+')';$('review-list').textContent='';
+    last.flags.forEach(function(f){var li=document.createElement('li'),b=document.createElement('button');b.textContent='Possible '+f.kind+': '+f.text;b.onclick=function(){focusReview(f.id);};li.appendChild(b);$('review-list').appendChild(li);});
+    last.leaks.forEach(function(secret,i){var li=document.createElement('li'),b=document.createElement('button');b.textContent='Still in the text: '+secret;b.className='bad';b.onclick=function(){focusReview('leak-'+i+'-0');};li.appendChild(b);$('review-list').appendChild(li);});
+    var state=EmailScrub.reviewState(last,acknowledged);$('copy').textContent=state.label;$('copy').className=state.red?'danger':'primary';$('copy').disabled=false;
+  }
+  $('review-next').onclick=function(){if(!last || !last.flags.length)return;reviewIndex=(reviewIndex+1)%last.flags.length;focusReview(last.flags[reviewIndex].id);};
 
-  function run() {
+  function run(preservePosition) {
+    var pageY=window.scrollY,outY=$('out').scrollTop,oldSignature=last && EmailScrub.reviewSignature(last);
     var text = $('input').value;
     if (!text.trim()) { $('input').focus(); return; }
-    last = EmailScrub.scrub(text, { me: $('me').value, thread: threadPeople(), saved: savedPeople, kill: $('kill').value.split('\n'), excluded: excluded, note: $('note').checked });
+    last = EmailScrub.scrub(text, { me: $('me').value, thread: threadPeople(), saved: savedPeople, kill: $('kill').value.split('\n'), excluded: excluded.concat(threadExcluded), kept: kept, note: $('note').checked });
     var today = new Date(), date = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
     EmailScrub.updateLastUsed({ saved: savedPeople }, last.usedSaved, date); renderSaved(); save();
-    acknowledged = false; selection = ''; $('exclude').disabled = true; $('selection-status').textContent = '';
+    if (!oldSignature || oldSignature !== EmailScrub.reviewSignature(last)) acknowledged = false;
+    reviewIndex=-1; $('review-panel').open=false; selection = ''; $('exclude').disabled = true; $('selection-status').textContent = '';
     paint(last.text);
     var c = last.counts, chips = [
       ['people', last.people.length], ['names replaced', c.names + c.roles], ['emails', c.emails], ['phones', c.phones], ['dates', c.dates],
@@ -871,35 +1032,17 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
       li.appendChild(code); li.appendChild(document.createTextNode(' = ' + p.names + ' (' + p.sources.join(', ') + ')')); $('people').appendChild(li);
     });
     $('people-sum').textContent = 'What was replaced (' + (shown.length + last.organisations.length) + (last.terms.length ? ' + ' + last.terms.length + ' terms' : '') + '): stays on this page';
-    $('possible-names').textContent = '';
-    (last.possibleNames || []).forEach(function (name) {
-      var row = document.createElement('p'); row.appendChild(document.createTextNode('Possible name: ' + name + ' '));
-      var b = document.createElement('button'); b.textContent = 'Remove'; b.setAttribute('aria-label', 'Remove possible name ' + name); b.onclick = function () { addExclusion(name); }; row.appendChild(b); $('possible-names').appendChild(row);
-    });
     $('results-title').textContent = '4. Check and copy' + (demo ? ' (demo)' : '');
-    check();
+    refreshReview();
     $('res').hidden = false; $('copied').textContent = '';
-    $('res').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  function check() {
-    var box = $('leak'); box.textContent = ''; box.className = '';
-    if (last.leaks.length && !acknowledged) {
-      box.className = 'alarm';
-      box.appendChild(document.createTextNode('Still in the text: ' + last.leaks.join(', ') + '. Add them to "Always remove" and scrub again. '));
-      var b = document.createElement('button'); b.textContent = 'I checked: copy anyway'; b.onclick = function () { acknowledged = true; check(); }; box.appendChild(b);
-      $('copy').disabled = true;
-    } else {
-      $('copy').disabled = false;
-      var p = document.createElement('p'); p.className = 'status ' + (last.warnings.length ? 'warn' : 'ok'); p.style.margin = '0 0 10px';
-      p.textContent = last.warnings.length ? 'Check before copying: ' + last.warnings.join(' ') : 'Leak check passed. Read it over once before you send it anywhere.';
-      box.appendChild(p);
-    }
+    if (preservePosition) { $('out').scrollTop=outY;window.scrollTo({top:pageY,behavior:'instant'}); }
+    else $('res').scrollIntoView({ behavior: 'instant', block: 'start' });
   }
   $('help-close').onclick = function () { $('help-dialog').close(); };
   $('help-open').onclick = function () { $('help-dialog').showModal(); };
   $('demo').onclick = function () {
-    if (!demo) beforeDemo = JSON.parse(JSON.stringify({ prefs: preferences(), thread: threadPeople() }));
-    demo = true; applyPreferences(EmailScrub.emptyPreferences()); $('roles').textContent = ''; $('me').value = 'Mira Quill, Mira';
+    if (!demo) beforeDemo = JSON.parse(JSON.stringify({ prefs: preferences(), thread: threadPeople(), threadExcluded: threadExcluded, kept: kept }));
+    demo = true; threadExcluded=[];kept=[]; applyPreferences(EmailScrub.emptyPreferences()); $('roles').textContent = ''; $('me').value = 'Mira Quill, Mira';
     addRow('CLIENT', 'Nolan Vale, Nolan'); addRow('', 'Lyra Finch, Lyra');
     $('kill').value = 'Project Lantern'; excluded = [{ text: 'sample-private', n: 1 }]; nextExcluded = 2; renderExcluded(); demoControls();
     $('input').value = EmailScrub.sample; run();
@@ -908,23 +1051,32 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
   $('input').addEventListener('input', function () { leaveDemo(); invalidate(); }); $('note').addEventListener('change', invalidate);
   document.addEventListener('selectionchange', function () {
     var sel = window.getSelection(); selection = '';
-    if (last && sel && sel.rangeCount && $('out').contains(sel.anchorNode) && $('out').contains(sel.focusNode)) selection = sel.toString().trim();
+    if (last && sel && sel.rangeCount && $('out').contains(sel.anchorNode) && $('out').contains(sel.focusNode)) { var clone=sel.getRangeAt(0).cloneContents();clone.querySelectorAll('.review-controls,.sr-only').forEach(function(n){n.remove();});selection=clone.textContent.trim(); }
     var inNote = false;
     if (selection && $('note').checked) {
       var prefix = document.createRange(); prefix.selectNodeContents($('out')); prefix.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
-      inNote = prefix.toString().length < last.text.indexOf('\n\n') + 2;
+      var prefixClone=prefix.cloneContents();prefixClone.querySelectorAll('.review-controls,.sr-only').forEach(function(n){n.remove();});
+      inNote = prefixClone.textContent.length < last.text.indexOf('\n\n') + 2;
     }
     var valid = selection && !inNote && !/[<>]|\[Confidentiality notice removed\]/.test(selection);
     $('exclude').disabled = !valid; $('selection-status').textContent = valid ? 'Selection ready to remove.' : (selection ? 'Select private text without placeholders or the AI note.' : '');
   });
+  $('out').addEventListener('copy',function(e){var sel=window.getSelection();if(!sel || !sel.rangeCount)return;var clone=sel.getRangeAt(0).cloneContents();clone.querySelectorAll('.review-controls,.sr-only').forEach(function(n){n.remove();});if(e.clipboardData){e.clipboardData.setData('text/plain',clone.textContent);e.preventDefault();}});
   $('exclude').addEventListener('mousedown', function (e) { e.preventDefault(); });
-  function addExclusion(text) {
-    if (!excluded.some(function (t) { return t.text === text; })) excluded.push({ text: text, n: nextExcluded++ });
-    renderExcluded(); save(); run();
+  function addExclusion(text, remember) {
+    var list=remember?excluded:threadExcluded;
+    if (!excluded.concat(threadExcluded).some(function(t){return EmailScrub.fold(t.text)===EmailScrub.fold(text);})) {
+      var n=Math.max.apply(null,[nextExcluded-1].concat(excluded.concat(threadExcluded).map(function(t){return t.n;})))+1;
+      list.push({text:text,n:n});if(remember)nextExcluded=n+1;
+    } else if(remember) {
+      var temporary=threadExcluded.find(function(t){return EmailScrub.fold(t.text)===EmailScrub.fold(text);});
+      if(temporary){threadExcluded.splice(threadExcluded.indexOf(temporary),1);excluded.push(temporary);nextExcluded=Math.max(nextExcluded,temporary.n+1);}
+    }
+    renderExcluded(); save(); run(true);
   }
   $('exclude').onclick = function () {
     if (!selection || $('exclude').disabled || !last) return;
-    addExclusion(selection); window.getSelection().removeAllRanges();
+    addExclusion(selection,true); window.getSelection().removeAllRanges();
   };
   $('input').addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
   $('file').onchange = function () {
@@ -932,7 +1084,7 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
     f.text().then(function (t) { $('input').value = t; $('file').value = ''; leaveDemo(); invalidate(); });
   };
   $('clear').onclick = function () {
-    $('input').value = ''; $('file').value = ''; leaveDemo(); $('roles').textContent = ''; invalidate(); $('out').textContent = ''; $('people').textContent = ''; $('input').focus();
+    $('input').value = ''; $('file').value = ''; leaveDemo(); threadExcluded=[];kept=[]; $('roles').textContent = ''; invalidate(); $('out').textContent = ''; $('people').textContent = ''; $('input').focus();
   };
   $('forget').onclick = function () {
     if (demo) return;
@@ -942,7 +1094,8 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
   };
   $('copy').onclick = function () {
     if (!last) return;
-    var text = last.text, done = function (ok) { $('copied').textContent = ok ? 'Copied.' : 'Copy was blocked: select the text above and press Ctrl+C.'; };
+    if (EmailScrub.reviewState(last,acknowledged).accept) { kept=kept.concat(last.flags.map(function(f){return f.text;}));last.flags=[];acknowledged=true;refreshReview();return; }
+    var text = last.text, done = function (ok) { $('copied').textContent = ok ? 'Copied.' : 'Copy was blocked: select the text above and press Ctrl+C.'; if(ok){$('copy').textContent='Copied';var copiedResult=last;setTimeout(function(){if(last===copiedResult)refreshReview();},1500);} };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback); else fallback();
     function fallback() {
       var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();

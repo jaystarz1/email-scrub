@@ -55,6 +55,60 @@
   var LABELLED_ID = /\b((?:Account|Acct|Policy|Claim|Member|Employee|Customer|Client|Case|File|Matter|Patient|Student|Licen[cs]e|Passport|Health card|Dossier|Compte|Police|Réclamation|Matricule)\s*(?:no\.?|number|#|n[o°]\.?|numéro)?\s*[:#]?\s*)([A-Z0-9][A-Z0-9-]{3,})\b/giu;
   function luhn(d) { var s = 0; for (var i = 0; i < d.length; i++) { var x = +d[d.length - 1 - i]; if (i % 2) { x *= 2; if (x > 9) x -= 9; } s += x; } return s % 10 === 0; }
 
+  function ibanOK(value) {
+    var s = value.replace(/[ \t]/g, '').toUpperCase();
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s)) return false;
+    var rotated = s.slice(4) + s.slice(0, 4), rem = 0;
+    for (var ch of rotated) for (var d of /[A-Z]/.test(ch) ? String(ch.charCodeAt(0) - 55) : ch) rem = (rem * 10 + +d) % 97;
+    return rem === 1;
+  }
+  function vinOK(s) {
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/i.test(s)) return false;
+    var letters = 'ABCDEFGHJKLMNPRSTUVWXYZ', values = '12345678123457923456789', weights = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2], sum = 0;
+    s = s.toUpperCase();
+    for (var i = 0; i < 17; i++) sum += (/\d/.test(s[i]) ? +s[i] : +values[letters.indexOf(s[i])]) * weights[i];
+    return s[8] === (sum % 11 === 10 ? 'X' : String(sum % 11));
+  }
+  function ipv4OK(s) { return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(s) && s.split('.').every(function (n) { return +n <= 255; }); }
+  function ipv6OK(s) {
+    if (!s.includes(':') || /::.*::/.test(s)) return false;
+    if (s.includes('.')) { var at = s.lastIndexOf(':'); if (!ipv4OK(s.slice(at + 1))) return false; s = s.slice(0, at + 1) + '0:0'; }
+    var compressed = s.includes('::'), sides = s.split('::');
+    var groups = sides.flatMap(function (part) { return part ? part.split(':') : []; });
+    return groups.every(function (g) { return /^[a-f0-9]{1,4}$/i.test(g); }) && (compressed ? groups.length < 8 : groups.length === 8);
+  }
+  // Review offsets are measured on the final output, never on a token-stripped copy.
+  function reviewFlags(text, possibleNames, kept, leaks) {
+    var masked = text.replace(TOKEN_RE, function (t) { return ' '.repeat(t.length); }), found = [];
+    var keep = new Set((kept || []).map(fold));
+    var protectedRanges = [];
+    (leaks || []).forEach(function (secret) {
+      var re = new RegExp(termPattern(secret), 'giu'), m;
+      while ((m = re.exec(masked))) protectedRanges.push([m.index, m.index + m[0].length]);
+    });
+    function collect(kind, re, valid) {
+      var m;
+      while ((m = re.exec(masked))) {
+        var start = m.index, end = start + m[0].length;
+        if (keep.has(fold(m[0])) || valid && !valid(m, masked) || protectedRanges.some(function (r) { return start < r[1] && end > r[0]; }) || found.some(function (f) { return start < f.end && end > f.start; })) continue;
+        found.push({ id: kind + '-' + start + '-' + end, kind: kind, text: text.slice(start, end), start: start, end: end });
+      }
+    }
+    collect('file', /(?<![\p{L}\p{N}_])[\p{L}\p{N}_.'’-]+\.(?:pdf|docx?|xlsx?|pptx|msg|eml|txt|jpg|png|zip)\b/giu);
+    collect('age', /\b(?:\d{1,3}-year-old|aged[ \t]+\d{1,3}|age[ \t]+\d{1,3}|âgé(?:e)?[ \t]+de[ \t]+\d{1,3}[ \t]+ans|\d{1,3}[ \t]+ans)\b/giu);
+    collect('url', /\b(?:linkedin\.com\/in|facebook\.com|instagram\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/gi);
+    collect('zip', ZIP_US);
+    collect('id', /(?<![\p{L}\p{N}_])(?=[A-Z0-9]*\d)[A-Z0-9]+(?:[ -]+[A-Z0-9]*\d[A-Z0-9]*)*(?![\p{L}\p{N}_])/giu, function (m, source) {
+      var compact = m[0].replace(/[ -]/g, ''), before = source.slice(0, m.index), after = source.slice(m.index + m[0].length);
+      if (!/^\d{5,}$/.test(compact) && !(/\d/.test(compact) && /[a-z]/i.test(compact) && compact.length >= 6)) return false;
+      if (/[$€£¥][ \t]*[\d,.]*$/.test(before) || /\d[:,.]$/.test(before) || /^[:,.]\d/.test(after)) return false;
+      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(m[0]) || /^\d{1,2}:\d{2}/.test(m[0]) || /^\d{3}[ -]\d{3}[ -]\d{4}$/.test(m[0])) return false;
+      return true;
+    });
+    (possibleNames || []).slice().sort(function (a,b) { return b.length-a.length; }).forEach(function (name) { collect('name', new RegExp(termPattern(name), 'giu')); });
+    return found.sort(function (a,b) { return a.start-b.start; });
+  }
+
   // Dates. Same calendar day -> same token, numbered in order of first appearance.
   var MON = { jan: 1, feb: 2, fev: 2, mar: 3, apr: 4, avr: 4, may: 5, mai: 5, jun: 6, jui: 6, jul: 7, aug: 8, aou: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   var MONTHS_RE = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|janv(?:ier)?|f[ée]v(?:r(?:ier)?)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|d[ée]c(?:embre)?)\\.?';
@@ -112,9 +166,21 @@
     text = text.replace(HEADER, function (whole, label, value) {
       var cleaned = value.replace(/([^;<>\n]+)(?=\s*<[^>]*@[^>]*>|$)/g, function (display) {
         var d = /(@[^<>]+|\([^)]*\)(?:.*)|\[[^\]]*\](?:.*)|\|.*)$/.exec(display);
-        if (!d) return display;
+        if (!d) {
+          var plain = display.trim().replace(/^"|"$/g, '');
+          if (!plain || parseName(plain) || !/<[^>]*@[^>]*>/.test(value) || /@/.test(plain)) return display;
+          if (!decorations.has(plain)) decorations.set(plain, '<ORG-' + (decorations.size + 1) + '>');
+          originals.push(plain); return (display.match(/^\s*/) || [''])[0] + decorations.get(plain) + ' ';
+        }
         var name = display.slice(0, d.index).trim().replace(/^"|"$/g, '');
-        if (!parseName(name)) return display;
+        if (!parseName(name)) {
+          // Any display string before an angle-bracket mailbox is identifying metadata.
+          if (!/<[^>]*@[^>]*>/.test(value)) return display;
+          var group = display.trim().replace(/^"|"$/g, '');
+          if (!group || /^<ORG-/.test(group)) return display;
+          if (!decorations.has(group)) decorations.set(group, '<ORG-' + (decorations.size + 1) + '>');
+          originals.push(group); return (display.match(/^\s*/) || [''])[0] + decorations.get(group) + ' ';
+        }
         var decoration = d[0].trim().replace(/"$/, '');
         if (!decorations.has(decoration)) decorations.set(decoration, '<ORG-' + (decorations.size + 1) + '>');
         originals.push(decoration);
@@ -262,7 +328,7 @@
     text = text.replace(/\[mailto:[^\]]*\]/gi, '').replace(/<\s*([^<>\s]+@[^<>\s]+)\s*>/g, ' $1');   // <a@b.c> -> a@b.c, so it becomes one <EMAIL>
     text = outside(text, EMAIL, function (e) { counts.emails++; originals.push(e); return '<EMAIL>'; });
     text = text.replace(/ {2,}<EMAIL>/g, ' <EMAIL>');
-    text = outside(text, URL, function (u) { counts.urls++; return '<URL>'; });
+    text = outside(text, URL, function (u) { counts.urls++; originals.push(u); return '<URL>'; });
 
     // 5. the kill list, then role names the user typed (longest first)
     var killTokens = [], exclusionPatterns = new Map();
@@ -295,6 +361,22 @@
     });
 
     // 6. structured identifiers
+    function identifier(re, token, valid) {
+      text = outside(text, re, function (value, offset, source) {
+        if (valid && !valid(value, offset, source)) return value;
+        counts.ids++; originals.push(value); return token;
+      });
+    }
+    identifier(/(?<![A-Z0-9])(?:[A-Z]{2}\d{2})(?:[ \t]?[A-Z0-9]){11,30}(?![A-Z0-9])/g, '<IBAN>', ibanOK);
+    identifier(/(?<![\p{L}\p{N}])\d{5}[ -]\d{3}[ -]\d{7,12}(?![\p{L}\p{N}])/gu, '<BANK>');
+    identifier(/(?<![\p{L}\p{N}:.-])(?:[A-F0-9]{2}:){5}[A-F0-9]{2}(?![\p{L}\p{N}:.-])|(?<![\p{L}\p{N}:.-])(?:[A-F0-9]{2}-){5}[A-F0-9]{2}(?![\p{L}\p{N}:.-])/giu, '<MAC>');
+    identifier(/(?<![\p{L}\p{N}:])[a-f0-9:]*(?::[a-f0-9:.]*)(?![\p{L}\p{N}:])/giu, '<IP>', ipv6OK);
+    identifier(/(?<![\p{L}\p{N}.])\d{1,3}(?:\.\d{1,3}){3}(?![\p{L}\p{N}.])/gu, '<IP>', function (value, offset, source) {
+      return ipv4OK(value) && !/(?:version|ver\.?|v)[ \t]*$/i.test(source.slice(0,offset));
+    });
+    identifier(/(?<![\p{L}\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\p{L}\p{N}])/giu, '<VIN>', vinOK);
+    identifier(/(?<![\p{L}\p{N}.])[-+]?\d{1,2}\.\d{4,}[ \t]*,[ \t]*[-+]?\d{1,3}\.\d{4,}(?![\p{L}\p{N}.])/gu, '<GPS>', function (v) { var pair=v.split(',').map(Number);return Math.abs(pair[0])<=90 && Math.abs(pair[1])<=180; });
+    identifier(/(?<![\p{L}\p{N}_.])@[A-Z0-9_][A-Z0-9_.]{1,29}(?![\p{L}\p{N}_.])/giu, '<HANDLE>', function (v) { return !/\.[a-z]{2,}$/i.test(v); });
     text = outside(text, LABELLED_ID, function (mm, label, id) { if (!/\d/.test(id)) return mm; counts.ids++; originals.push(id); return label + '<ID>'; });
     text = outside(text, SSN, function (s) { counts.ids++; originals.push(s); return '<SSN>'; });
     text = outside(text, SIN, function (s) { var d = s.replace(/\D/g, ''); if (!luhn(d)) return s; counts.ids++; originals.push(s); return '<SIN>'; });
@@ -303,7 +385,7 @@
     text = outside(text, PO_BOX, function () { counts.addresses++; return '<ADDRESS>'; });
     text = outside(text, ADDRESS, function (a) { counts.addresses++; originals.push(a); return '<ADDRESS>'; });
     text = outside(text, POSTAL_CA, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
-    text = outside(text, ZIP_US, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    text = text.replace(ZIP_US, function (p, off, whole) { var start=whole.lastIndexOf('\n',off)+1; var prev=whole.slice(0,start).trimEnd().split('\n').pop() || ''; if (!/<ADDRESS>/.test(whole.slice(start,off)) && !/<ADDRESS>/.test(prev)) return p; counts.postal++; originals.push(p); return '<POSTAL>'; });
     // City/province lines are private only in an address context, including quoted lines.
     var region = '(?:AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)';
     var city = new RegExp(NB + '(' + CAP + '(?:[ \t]+' + CAP + ')?),[ \t]*' + region + NA, 'gu');
@@ -317,7 +399,7 @@
       });
     }).join('\n');
     var dates = new Map();
-    text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; return dates.get(k); });
+    text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; originals.push(d); return dates.get(k); });
     // A day and month without a year ("the March 28 deadline") shares the token of the one full date it matches.
     text = outside(text, PARTIAL_DATE, function (d, mon1, day1, day2, mon2) {
       var mo = MON[fold(mon1 || mon2).slice(0, 3)], day = +(day1 || day2);
@@ -325,7 +407,7 @@
       var same = Array.from(dates.keys()).filter(function (k) { return new RegExp('^\\d{4}-' + mo + '-' + day + '$').test(k); });
       var k = same.length === 1 ? same[0] : mo + '-' + day;
       if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>');
-      counts.dates++; return dates.get(k);
+      counts.dates++; originals.push(d); return dates.get(k);
     });
 
     // 7. people: full names, "Last, First", surnames, then first names that belong to exactly one person
@@ -367,6 +449,18 @@
 
     // 8. tidy and the preservation note
     text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    // Only generated PERSON tokens are renumbered; explicit labels remain untouched.
+    var protectedLabels = new Set(roles.filter(function (r) { return r.names.length && configured.some(function (c) { return sanitizeLabel(c.label) === r.token.slice(1,-1); }); }).map(function (r) { return r.token; }));
+    var renumber = new Map(), number = 0;
+    text = text.replace(/<PERSON-\d+>/g, function (token) {
+      if (protectedLabels.has(token)) return token;
+      if (!renumber.has(token)) { var next; do { next = '<PERSON-' + (++number) + '>'; } while (protectedLabels.has(next)); renumber.set(token,next); }
+      return renumber.get(token);
+    });
+    people = people.filter(function(p){return !/^<PERSON-/.test(p.token) || protectedLabels.has(p.token) || renumber.has(p.token);});
+    people.forEach(function (p) { if (renumber.has(p.token)) p.token=renumber.get(p.token); });
+    roles = roles.filter(function(r){return !/^<PERSON-/.test(r.token) || protectedLabels.has(r.token) || renumber.has(r.token);});
+    roles.forEach(function (r) { if (renumber.has(r.token)) r.token=renumber.get(r.token); });
     if (opts.note !== false) text = 'Note: placeholders such as <PERSON-1> or <DATE-2> stand for removed details. Keep them exactly as written in any reply.\n\n' + text;
 
     // 9. leak check: nothing that was removed may still be in the output
@@ -397,7 +491,9 @@
     if (/@[\p{L}\p{N}-]+\.[\p{L}]{2,}/u.test(bare)) warnings.push('An "@" address fragment is still in the text.');
     if (/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(bare)) warnings.push('A number that looks like part of a phone number is still in the text.');
 
+    var flags = reviewFlags(text, possibleNames, opts.kept, leaks);
     return {
+      flags: flags,
       text: text,
       people: people.map(function (p) { return { token: p.token, names: [p.first, p.last].filter(Boolean).join(' '), emails: Array.from(p.emails), sources: Array.from(p.sources) }; }),
       roles: roles.map(function (r) { return { token: r.token, names: r.names }; }),
@@ -473,6 +569,19 @@ The March 28 deadline remains unchanged.
 Project Lantern is a fictional project.
 The internal note is sample-private.
 Account number: DEMO12345
+Fictional test IBAN: GB82 WEST 1234 5698 7654 32
+Fictional test bank: 12345-001-1234567
+Documentation IP: 192.0.2.42
+Documentation IPv6: 2001:db8::42
+Fictional MAC: 02:00:00:00:00:42
+Example VIN: 1M8GDM9AXKP042788
+Fictional coordinates: 45.0000, -75.0000
+Fictional handle: @sample_quill
+Ref A1B 234 567
+Attachment: Example_J_PAR_2024.pdf
+The fictional caller is aged 52.
+Profile: linkedin.com/in/fictional-sample
+US test region: NY 10001
 Demo SIN: 046 454 286
 Demo SSN: 123-45-6789
 Demo payment test card: 4111 1111 1111 1111
@@ -515,6 +624,17 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
 >> Cheers,
 >> Lyra Finch`;
 
-  var api = { sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.4.0' };
+  function leakRanges(text, leaks) {
+    var masked=text.replace(TOKEN_RE,function(t){return ' '.repeat(t.length);}), found=[];
+    (leaks || []).forEach(function(secret,i){var re=new RegExp(termPattern(secret),'giu'),m,j=0;while((m=re.exec(masked)))found.push({id:'leak-'+i+'-'+(j++),text:m[0],start:m.index,end:m.index+m[0].length});});
+    return found;
+  }
+  function reviewState(result, acknowledged) {
+    if (!acknowledged && result.leaks.length) return { label: 'Accept with ' + result.leaks.length + ' leak' + (result.leaks.length === 1 ? '' : 's'), accept: true, red: true };
+    if (result.flags.length) return { label: 'Accept (' + result.flags.length + ' to review)', accept: true, red: false };
+    return { label: 'Copy', accept: false, red: false };
+  }
+  function reviewSignature(result) { return JSON.stringify([result.text, result.flags.map(function (f) { return [f.kind,f.start,f.end,f.text]; }), result.leaks]); }
+  var api = { leakRanges: leakRanges, reviewState: reviewState, reviewSignature: reviewSignature, reviewFlags: reviewFlags, ibanOK: ibanOK, vinOK: vinOK, ipv6OK: ipv6OK, sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.5.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

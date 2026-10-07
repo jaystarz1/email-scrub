@@ -19,7 +19,7 @@ test('P1 labels participate and cannot collide with automatic tokens or ME',()=>
  const r=run('Zorvex Quill\nFrom: Jane Doe <x@example.com>',{thread:[{names:'Zorvex Quill',label:'PERSON-1'}]});
  assert.equal(r.text,'<PERSON-1>\nFrom: <PERSON-2> <EMAIL>');
  assert.equal(run('Zorvex Quill',{thread:[{names:'Zorvex Quill',label:'ME'}]}).text,'<ME-2>');
- assert.equal(run('Zorvex Quill\nFrom: Jane Doe <x@example.com>',{thread:[{names:'Zorvex Quill',label:'GRIEVOR'}]}).text,'<GRIEVOR>\nFrom: <PERSON-2> <EMAIL>');
+ assert.equal(run('Zorvex Quill\nFrom: Jane Doe <x@example.com>',{thread:[{names:'Zorvex Quill',label:'GRIEVOR'}]}).text,'<GRIEVOR>\nFrom: <PERSON-1> <EMAIL>');
 });
 test('P3 labelled row sanitizes; repeated labels remain distinct',()=>{
  assert.equal(run('Zorvex Quill',{thread:[{names:'Zorvex Quill',label:' grievor '}]}).text,'<GRIEVOR>');
@@ -64,6 +64,6 @@ test('R3 Canadian/US city in address context only, quoted and bilingual',()=>{
 test('R4 close button is plain, invokes dialog.close, no form',()=>{const html=fs.readFileSync('src/app.html','utf8');assert(html.includes('id="help-close" type="button"'));assert(html.includes("$('help-dialog').close()"));assert(!/<form/.test(html));});
 test('R5 old exclusions trigger notice; current exclusions do not',()=>{assert(E.migrationNotice({excluded:['Analyst']}));assert(!E.migrationNotice({excluded:[{text:'Analyst',n:1}]}));assert(!E.migrationNotice({excluded:[]}));assert.equal(run('Analyste Analyst',{excluded:E.migratePreferences({people:[],kill:'',excluded:['Analyst']}).excluded}).text,'Analyste <EXCLUDED-1>');});
 test('delivery version/privacy constraints retained',()=>{
- const html=fs.readFileSync('email-scrub.html','utf8');assert.equal(E.version,'0.4.0');assert(html.includes("version: '0.4.0'"));assert(html.includes("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'"));assert(!/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/.test(html));assert(!/<(?:script|link)[^>]+(?:src|href)=/i.test(html));
+ const html=fs.readFileSync('email-scrub.html','utf8');assert.equal(E.version,'0.5.0');assert(html.includes("version: '0.5.0'"));assert(html.includes("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'"));assert(!/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/.test(html));assert(!/<(?:script|link)[^>]+(?:src|href)=/i.test(html));
 });
 console.log(`PASS v0.4: ${checks} acceptance groups`);

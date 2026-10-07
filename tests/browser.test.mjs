@@ -20,16 +20,17 @@ try {
   await p.locator('#roles input.names').first().fill('Adaeze Okafor, Adaeze');
   await p.fill('#kill', 'Invoice 4471');
   await p.click('#go');
-  const out = await p.textContent('#out');
+  const out = await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;});
   for (const g of ['Okafor', 'Adaeze', 'Whitfield', 'Jordan', 'harbourline.ca', '555-0142', 'Invoice 4471']) assert(!out.includes(g), 'leak: ' + g);
   for (const s of ['<CLIENT>', '<PERSON-1>', '<TERM-1>', 'clause 12.1.3', 'Note: placeholders']) assert(out.includes(s), 'missing: ' + s);
-  assert((await p.textContent('#leak')).includes('Harbourline Logistics'), 'organisation warning shown');
+  assert((await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('Harbourline Logistics'), 'organisation remains visible for review');
   assert(!(await p.isDisabled('#copy')), 'copy enabled after a passing leak check');
   assert((await p.textContent('#counts')).includes('emails'));
+  if((await p.textContent('#copy')).startsWith('Accept')) await p.click('#copy');
   await p.click('#copy');
   assert.equal(await p.evaluate(() => navigator.clipboard.readText()), out);
   // Note off
-  await p.uncheck('#note'); await p.click('#go'); assert(!(await p.textContent('#out')).startsWith('Note:'));
+  await p.uncheck('#note'); await p.click('#go'); assert(!(await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).startsWith('Note:'));
   // Persist configuration only, never the raw thread or scrubbed result.
   const prefs = await p.evaluate(() => JSON.parse(localStorage.getItem('email-scrub.preferences.v3')));
   assert.equal(prefs.kill, 'Invoice 4471'); assert(!JSON.stringify(prefs).includes('clause 12.1.3'));
@@ -46,7 +47,7 @@ try {
   const person = p.locator('.role-row').last();
   await person.locator('.names').fill('Zorvex Quill'); await person.locator('.labin').fill('Team lead');
   await p.fill('#input', 'Zorvex Quill sent Project Cobalt. Project Cobalt stays secret.'); await p.click('#go');
-  assert((await p.textContent('#out')).includes('<TEAM-LEAD>'));
+  assert((await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('<TEAM-LEAD>'));
   // Select across real rendered text and use the highlighter button.
   async function highlight(text) {
     await p.evaluate(text => {
@@ -62,21 +63,22 @@ try {
     await p.click('#exclude');
   }
   await highlight('Project Cobalt');
-  assert(!(await p.textContent('#out')).includes('Project Cobalt')); assert((await p.textContent('#out')).includes('<EXCLUDED-1>'));
-  await p.click('#copy'); assert.equal(await p.evaluate(() => navigator.clipboard.readText()), await p.textContent('#out'));
+  assert(!(await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('Project Cobalt')); assert((await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('<EXCLUDED-1>'));
+  if((await p.textContent('#copy')).startsWith('Accept')) await p.click('#copy');
+  await p.click('#copy'); assert.equal(await p.evaluate(() => navigator.clipboard.readText()), await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;}));
   await person.locator('button').filter({hasText:/^Save$/}).click();
   await p.reload(); assert.equal(await p.inputValue('#input'), '');
   await p.fill('#input', 'Project Cobalt and Zorvex Quill again.'); await p.click('#go');
-  assert(!(await p.textContent('#out')).includes('Project Cobalt')); assert((await p.textContent('#out')).includes('<TEAM-LEAD>'));
+  assert(!(await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('Project Cobalt')); assert((await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('<TEAM-LEAD>'));
   // Editing input invalidates the old result and prevents copying stale text.
   await p.fill('#input', 'Changed thread'); assert(await p.isHidden('#res'));
   // Multiline selection, markup injection remains literal, fragments are removed everywhere.
   await p.fill('#input', 'privatecode and privatecode.\nLine one\nLine two\n<img src=x onerror=alert(1)>'); await p.click('#go');
   assert.equal(await p.locator('#out img').count(), 0);
-  await highlight('privatecode'); assert(!(await p.textContent('#out')).includes('privatecode'));
-  await highlight('Line one\nLine two'); assert(!(await p.textContent('#out')).includes('Line two'));
+  await highlight('privatecode'); assert(!(await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('privatecode'));
+  await highlight('Line one\nLine two'); assert(!(await p.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.review-controls,.sr-only').forEach(n=>n.remove());return c.textContent;})).includes('Line two'));
   // Existing placeholders must not become saved private terms.
-  await p.evaluate(() => { const node = document.querySelector('#out .t').firstChild; const range = document.createRange(); range.selectNodeContents(node); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); });
+  await p.evaluate(() => { const node = document.querySelector('#out .t .value').firstChild; const range = document.createRange(); range.selectNodeContents(node); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); });
   await p.waitForFunction(() => document.getElementById('exclude').disabled);
   await p.locator('details').filter({ has: p.locator('#saved-terms') }).locator('summary').click();
   await p.locator('#saved-terms button').first().click(); await p.reload();

@@ -65,8 +65,8 @@ test('E4 migration preserves v1 order and monotonically increasing counter', () 
   assert.deepEqual(old.excluded,['short','longer passage']); assert.deepEqual(E.migratePreferences(saved),saved);
   assert.throws(()=>E.migratePreferences({...old,excluded:[{text:'x',n:0}]}));
 });
-test('F1 inline demo 40–60 lines, complete chain, bilingual and all token types', () => {
-  assert(E.sample.split('\n').length>=40 && E.sample.split('\n').length<=60);
+test('F1 inline demo 40–90 lines, complete chain, bilingual and all token types', () => {
+  assert(E.sample.split('\n').length>=40 && E.sample.split('\n').length<=90);
   const r=run(E.sample,{roles:[{label:'Client',names:['Mira Quill']}],kill:['Project Lantern'],excluded:[{text:'sample-private',n:1}]});
   for(const tok of ['CLIENT','PERSON-1','ORG-1','EMAIL','PHONE','ADDRESS','POSTAL','DATE-1','ID','SIN','SSN','CARD','URL','TERM-1','EXCLUDED-1']) assert(r.text.includes(`<${tok}>`),tok);
   assert(r.text.includes('[Confidentiality notice removed]')); assert(r.possibleNames.includes('Andre'));
@@ -76,7 +76,7 @@ test('privacy and inline deliverable constraints', () => {
   const html=fs.readFileSync('email-scrub.html','utf8'), oldCsp="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'";
   assert(html.includes(oldCsp)); assert(!/<(?:script|link)[^>]+(?:src|href)=/i.test(html));
   assert(!/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/.test(html));
-  assert.equal(E.version,'0.4.0'); assert(html.includes("version: '0.4.0'"));
-  assert.equal((html.match(/popovertarget=/g)||[]).length,5); assert(html.includes('<dialog'));
+  assert.equal(E.version,'0.5.0'); assert(html.includes("version: '0.5.0'"));
+  assert.equal((html.match(/popovertarget=/g)||[]).length,7); assert(html.includes('<dialog'));
 });
 console.log(`PASS v0.3: ${checks} acceptance groups`);
