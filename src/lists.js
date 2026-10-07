@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
   var api = {
-    commonEN: [
+    commonEN: ["tell",
     "a", "about", "above", "after", "again", "against", "all", "almost", "along", "already", "also", "although",
     "always", "am", "among", "an", "and", "another", "any", "anyone", "anything", "are", "around", "as", "at",
     "back", "based", "be", "because", "been", "before", "being", "below", "best", "better", "between", "beyond",
@@ -32,7 +32,7 @@
     "whereby", "wherein", "whether", "which", "while", "who", "whom", "whose", "why", "will", "with", "within",
     "without", "would", "yes", "yet", "you", "your", "yours"
     ],
-    commonFR: [
+    commonFR: ["dis", "dites",
     "a", "afin", "ainsi", "alors", "apres", "au", "aucun", "aucune", "aupres", "aussi", "autant", "autre", "autres",
     "aux", "avant", "avec", "avoir", "bien", "car", "ce", "ceci", "cela", "celle", "celles", "celui", "cependant",
     "certain", "certaine", "certaines", "certains", "ces", "cet", "cette", "ceux", "chacun", "chaque", "chez",

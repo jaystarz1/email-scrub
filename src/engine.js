@@ -11,6 +11,7 @@
   function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   var COMMON = new Set(L.commonEN.concat(L.commonFR, L.months, L.notNames).map(fold));
   var FIRST = new Set(L.firstNames.map(fold));
+  var MONTH_WORDS = new Set(L.months.map(fold));
   var WORDLIKE_FIRST = new Set(L.wordlikeFirstNames.map(fold));
   var CAP = '\\p{Lu}[\\p{L}\'’-]*';                       // Capitalized word (also McKay, O'Neil, Jean-Luc)
   var NB = '(?<![\\p{L}\\p{N}])', NA = '(?![\\p{L}\\p{N}])';
@@ -105,7 +106,25 @@
     opts = opts || {};
     var text = String(input || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ');
     var counts = { emails: 0, phones: 0, dates: 0, addresses: 0, postal: 0, urls: 0, ids: 0, names: 0, terms: 0, roles: 0, disclaimers: 0 };
-    var warnings = [], originals = [];
+    var warnings = [], originals = [], decorations = new Map();
+    // Header decorations are generic display metadata, never separate people.
+    HEADER.lastIndex = 0;
+    text = text.replace(HEADER, function (whole, label, value) {
+      var cleaned = value.replace(/([^;<>\n]+)(?=\s*<[^>]*@[^>]*>|$)/g, function (display) {
+        var d = /(@[^<>]+|\([^)]*\)(?:.*)|\[[^\]]*\](?:.*)|\|.*)$/.exec(display);
+        if (!d) return display;
+        var name = display.slice(0, d.index).trim().replace(/^"|"$/g, '');
+        if (!parseName(name)) return display;
+        var decoration = d[0].trim().replace(/"$/, '');
+        if (!decorations.has(decoration)) decorations.set(decoration, '<ORG-' + (decorations.size + 1) + '>');
+        originals.push(decoration);
+        name = name.replace(/^(\p{Lu}[\p{L}'’-]+,\s*\p{Lu}[\p{L}'’-]+)\s+\p{Lu}\.?$/u, '$1');
+        return (display.match(/^\s*/) || [''])[0] + name + ' ' + decorations.get(decoration) + ' ';
+      });
+      // A bare middle initial belongs to Last, First even without decoration.
+      cleaned = cleaned.replace(/(\p{Lu}[\p{L}'’-]+,\s*\p{Lu}[\p{L}'’-]+)\s+\p{Lu}\.?(?=\s*(?:<|;|$))/gu, '$1');
+      return whole.slice(0, whole.length - value.length) + cleaned;
+    });
 
     // 0. noise: inline image references and phone sign-offs
     text = text.replace(/\[cid:[^\]]*\]/gi, '').replace(/^[ \t>]*(?:Sent from my \w+|Get Outlook for \w+|Envoyé de mon \w+|Envoyé à partir de \w+.*)[ \t]*$/gmi, '');
@@ -150,7 +169,7 @@
     HEADER.lastIndex = 0;
     while ((m = HEADER.exec(text))) {
       if (m[1] === 'A' && !/@/.test(m[2])) continue;
-      var line = m[2];
+      var line = m[2].replace(/<ORG-\d+>/g, '');
       var pair = /(?:"?([^"<>;\n]+?)"?\s*)?(?:<|\[mailto:)([^<>\s\]]+@[^<>\s\]]+)(?:>|\])/g, pm, seen = false;
       while ((pm = pair.exec(line))) {
         seen = true; var em = pm[2].toLowerCase(), disp = (pm[1] || '').replace(/^[,;\s]+/, '');
@@ -180,30 +199,54 @@
         addPerson({ first: m[1], last: m[2] }, 'text');
     }
 
-    // 2. roles: the user's names collapse to the role token; a detected person who matches joins the role
-    var usedLabels = new Set();
-    var roles = (opts.roles || []).filter(function (r) { return r && r.label && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
-      var label = String(r.label).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ROLE';
-      var base = label, suffix = 1;
-      while (usedLabels.has(label)) label = base + '-' + (++suffix);
-      usedLabels.add(label);
-      return { token: '<' + label + '>', names: r.names.map(function (n) { return n.trim(); }).filter(Boolean) };
+    // All configured sources use the same person shape. Legacy roles remain an API compatibility path.
+    var modern = opts.me !== undefined || opts.thread !== undefined || opts.saved !== undefined;
+    var usedLabels = new Set(['ME']), usedSaved = new Set();
+    var configured = modern ? effectivePeople(opts) : (opts.roles || []).map(function (r) { return Object.assign({ source: 'legacy' }, r); });
+    var roles = configured.filter(function (r) { return r && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
+      var label = sanitizeLabel(r.label), token = null;
+      if (r.source === 'me') token = '<ME>';
+      else if (label) {
+        var base = label, suffix = 1;
+        while (usedLabels.has(label)) label = base + '-' + (++suffix);
+        usedLabels.add(label); token = '<' + label + '>';
+      }
+      return { token: token, names: r.names.map(function (n) { return n.trim(); }).filter(Boolean), source: r.source, id: r.id };
     });
-    var roleParts = [];   // [foldedName, token]
+    function firstAt(names) {
+      return Math.min.apply(null, names.map(function (name) { var hit = new RegExp(termPattern(name), 'iu').exec(text); return hit ? hit.index : Infinity; }));
+    }
+    var roleParts = [];
     roles.forEach(function (r) {
-      r.names.forEach(function (n) {
-        roleParts.push([fold(n), r.token]);
-        var p = parseName(n);
-        if (p && p.last) roleParts.push([fold(p.last), r.token]);
-        if (p && p.first && p.last) roleParts.push([fold(p.first), r.token]);
+      r.at = firstAt(r.names);
+      r.names.forEach(function (name) {
+        roleParts.push([fold(name), r]);
+        var parsed = parseName(name);
+        if (parsed && parsed.last) roleParts.push([fold(parsed.last), r]);
+        if (parsed && parsed.first && parsed.last) roleParts.push([fold(parsed.first), r]);
       });
     });
     function roleFor(name) { var f = fold(name); var hit = roleParts.find(function (x) { return x[0] === f; }); return hit ? hit[1] : null; }
-    var n = 0;
-    people.sort(function (a, b) { return a.order - b.order; }).forEach(function (p) {
-      p.token = (p.last && roleFor(p.last)) || (p.first && p.last && roleFor(p.first + ' ' + p.last)) || (!p.last && p.first && roleFor(p.first)) || null;
-      if (!p.token) p.token = '<PERSON-' + (++n) + '>';
+    people.forEach(function (p) {
+      // Full forms before inferred surname aliases prevent a short surname stealing a configured full name.
+      p.owner = (p.first && p.last && roleFor(p.first + ' ' + p.last)) || (p.last && roleFor(p.last)) || (!p.last && p.first && roleFor(p.first)) || null;
+      p.at = firstAt([p.first && p.last ? p.first + ' ' + p.last : '', p.first && p.last ? p.last + ', ' + p.first : '', p.last, p.first].filter(Boolean));
+      if (p.owner) p.owner.at = Math.min(p.owner.at, p.at);
     });
+    var n = 0;
+    function numbered() { var label; do { label = 'PERSON-' + (++n); } while (usedLabels.has(label)); usedLabels.add(label); return '<' + label + '>'; }
+    if (modern) {
+      var identities = roles.concat(people.filter(function (p) { return !p.owner; }));
+      identities.sort(function (a, b) { return a.at - b.at; }).forEach(function (p) {
+        if (p.source === 'me') return;
+        if (!p.token) p.token = numbered();
+        else if (p.at !== Infinity) n++; // Labelled people occupy the same appearance sequence.
+      });
+    }
+    people.sort(function (a, b) { return modern ? a.at - b.at : a.order - b.order; }).forEach(function (p) {
+      p.token = p.owner ? p.owner.token : (p.token || numbered());
+    });
+    function markUsed(token) { roles.forEach(function (r) { if (r.token === token && r.source === 'saved') usedSaved.add(r.id); }); }
 
     // 3. disclaimers (whole paragraph)
     text = text.split(/\n\s*\n/).map(function (para) {
@@ -222,23 +265,33 @@
     text = outside(text, URL, function (u) { counts.urls++; return '<URL>'; });
 
     // 5. the kill list, then role names the user typed (longest first)
-    var killTokens = [];
-    // Explicit selections also remove fragments and multiline passages, outside existing tokens.
-    (opts.excluded || []).map(function (t) { return String(t).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (term, i) {
-      var tok = '<EXCLUDED-' + (i + 1) + '>'; killTokens.push([term, tok]); originals.push(term);
-      var literal = termPattern(term).slice(NB.length, -NA.length);
-      text = outside(text, new RegExp(literal, 'giu'), function () { counts.terms++; return tok; });
+    var killTokens = [], exclusionPatterns = new Map();
+    // Stable IDs are independent of matching order. Short letter selections retain case.
+    (opts.excluded || []).map(function (t, i) { return typeof t === 'string' ? { text: t.trim(), n: i + 1 } : { text: String(t.text || '').trim(), n: t.n }; }).filter(function (t) { return t.text; }).sort(function (a, b) { return b.text.length - a.text.length; }).forEach(function (item) {
+      var term = item.text, tok = '<EXCLUDED-' + item.n + '>'; killTokens.push([term, tok]);
+      var short = /^\p{L}{1,3}$/u.test(term);
+      var literal = short ? esc(term) : termPattern(term).slice(NB.length, -NA.length);
+      if (/^[\p{L}\p{N}]/u.test(term)) literal = NB + literal;
+      if (/[\p{L}\p{N}]$/u.test(term)) literal += NA;
+      var pattern = new RegExp(literal, short ? 'gu' : 'giu');
+      exclusionPatterns.set(fold(term), new RegExp(literal, short ? 'u' : 'iu'));
+      // Only matched originals feed the leak gate; an unmatched case-sensitive term is not a leak.
+      text = outside(text, pattern, function (match) { originals.push(match); counts.terms++; return tok; });
     });
-    (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (k, i) {
-      var tok = '<TERM-' + (i + 1) + '>'; killTokens.push([k, tok]); originals.push(k);
+    (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).map(function (k, i) { return { text: k, n: i + 1 }; }).sort(function (a, b) { return b.text.length - a.text.length; }).forEach(function (item) {
+      var k = item.text, tok = '<TERM-' + item.n + '>'; killTokens.push([k, tok]); originals.push(k);
       text = outside(text, new RegExp(termPattern(k), 'giu'), function () { counts.terms++; return tok; });
     });
     var roleStrings = [];
     roles.forEach(function (r) { r.names.forEach(function (nm) { roleStrings.push([nm, r.token]); }); });
     people.forEach(function (p) { if (/^<PERSON-/.test(p.token)) return; if (p.first && p.last) roleStrings.push([p.first + ' ' + p.last, p.token], [p.last + ', ' + p.first, p.token]); });
-    roleStrings.sort(function (a, b) { return b[0].length - a[0].length; }).forEach(function (x) {
+    roleStrings.sort(function (a, b) {
+      if (modern) { var ar = roles.findIndex(function (r) { return r.token === a[1]; }), br = roles.findIndex(function (r) { return r.token === b[1]; });
+        var ap = roles[ar].source === 'me' ? 0 : roles[ar].source === 'thread' ? 1 : 2, bp = roles[br].source === 'me' ? 0 : roles[br].source === 'thread' ? 1 : 2; if (ap !== bp) return ap - bp; }
+      return b[0].length - a[0].length;
+    }).forEach(function (x) {
       originals.push(x[0]);
-      text = outside(text, new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu'), function (mm, poss) { counts.roles++; return x[1] + (poss || ''); });
+      text = outside(text, new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu'), function (mm, poss) { counts.roles++; markUsed(x[1]); return x[1] + (poss || ''); });
     });
 
     // 6. structured identifiers
@@ -251,6 +304,18 @@
     text = outside(text, ADDRESS, function (a) { counts.addresses++; originals.push(a); return '<ADDRESS>'; });
     text = outside(text, POSTAL_CA, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
     text = outside(text, ZIP_US, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    // City/province lines are private only in an address context, including quoted lines.
+    var region = '(?:AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)';
+    var city = new RegExp(NB + '(' + CAP + '(?:[ \t]+' + CAP + ')?),[ \t]*' + region + NA, 'gu');
+    var addressLines = text.split('\n');
+    text = addressLines.map(function (line, i) {
+      return line.replace(city, function (match, name, off) {
+        var after = line.slice(off + match.length), before = line.slice(0, off);
+        var previousAddress = i > 0 && /<ADDRESS>/.test(addressLines[i - 1]) && /^[ \t>]*$/.test(before);
+        if (!previousAddress && !/^[ \t]+<POSTAL>/.test(after)) return match;
+        counts.addresses++; originals.push(match); return '<ADDRESS>';
+      });
+    }).join('\n');
     var dates = new Map();
     text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; return dates.get(k); });
     // A day and month without a year ("the March 28 deadline") shares the token of the one full date it matches.
@@ -281,9 +346,24 @@
       var re = new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu');   // word-like first names: capitalized only (below)
       text = outside(text, re, function (mm, poss, off, whole) {
         if (x[2] && !/^\p{Lu}/u.test(mm)) return mm;
-        counts.names++; return x[1] + (poss || '');
+        counts.names++; markUsed(x[1]); return x[1] + (poss || '');
       });
     });
+
+    // Nonblocking review candidates, outside placeholders and before the AI note.
+    var possibleNames = [], candidateSeen = new Set();
+    function candidate(name) { if (!candidateSeen.has(fold(name))) { candidateSeen.add(fold(name)); possibleNames.push(name); } }
+    var review = text.replace(TOKEN_RE, function (token) { return ' '.repeat(token.length); });
+    var words = /[\p{L}'’-]+/gu, wm;
+    while ((wm = words.exec(review))) {
+      var word = wm[0], key = fold(word), before = review.slice(0, wm.index);
+      var initial = /(?:^|[.!?\n])\s*[>]*\s*$/.test(before);
+      var dateContext = MONTH_WORDS.has(key) && /^\s+\d{4}\b/.test(review.slice(wm.index + word.length));
+      if (!dateContext && (FIRST.has(key) || WORDLIKE_FIRST.has(key) && /^\p{Lu}/u.test(word) && !initial)) candidate(word);
+    }
+    PROSE_NAME.lastIndex = 0;
+    while ((m = PROSE_NAME.exec(review))) if (!/^[\p{Lu}]+$/u.test(m[1]) && !/^[\p{Lu}]+$/u.test(m[2]) && !/^[ \t]*:/.test(review.slice(m.index + m[0].length)) && !COMMON.has(fold(m[1])) && !COMMON.has(fold(m[2]))) candidate(m[0]);
+    if (possibleNames.length) warnings.push('Possible names still in the text: ' + possibleNames.join(', ') + '.');
 
     // 8. tidy and the preservation note
     text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -294,7 +374,14 @@
     originals.concat(roles.flatMap(function (r) { return r.names; })).forEach(function (o) {
       o = String(o).trim(); if (o.length < 2 || seen.has(fold(o))) return; seen.add(fold(o)); secrets.push(o);
     });
-    var leaks = leakCheck(text, secrets);
+    var leaks = leakCheck(text, secrets).filter(function (secret) {
+      var exact = exclusionPatterns.get(fold(secret));
+      return !exact || exact.test(text.replace(TOKEN_RE, ' '));
+    });
+    decorations.forEach(function (tok, decoration) {
+      var literal = termPattern(decoration).slice(NB.length, -NA.length);
+      if (new RegExp(literal, 'iu').test(text.replace(TOKEN_RE, ' ')) && leaks.indexOf(decoration) < 0) leaks.push(decoration);
+    });
     var bare = text.replace(TOKEN_RE, ' ');
     // Organisations behind the email domains that still appear by name (the user decides; they may not be sensitive).
     var orgs = [];
@@ -306,7 +393,7 @@
       var m = new RegExp(NB + esc(word) + '[\\p{L}]*(?:[ \\t]+' + CAP + ')?', 'iu').exec(bare);
       if (m && orgs.indexOf(m[0]) < 0) orgs.push(m[0]);
     });
-    if (orgs.length) warnings.push('These organisation names match the email addresses and are still in the text: ' + orgs.join(', ') + '. Add them to My company or Always remove if they identify anyone.');
+    if (orgs.length) warnings.push('These organisation names match the email addresses and are still in the text: ' + orgs.join(', ') + '. Add them to Always remove if they identify anyone.');
     if (/@[\p{L}\p{N}-]+\.[\p{L}]{2,}/u.test(bare)) warnings.push('An "@" address fragment is still in the text.');
     if (/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(bare)) warnings.push('A number that looks like part of a phone number is still in the text.');
 
@@ -314,8 +401,9 @@
       text: text,
       people: people.map(function (p) { return { token: p.token, names: [p.first, p.last].filter(Boolean).join(' '), emails: Array.from(p.emails), sources: Array.from(p.sources) }; }),
       roles: roles.map(function (r) { return { token: r.token, names: r.names }; }),
+      organisations: Array.from(decorations.entries()).map(function (x) { return { text: x[0], token: x[1] }; }),
       terms: killTokens.map(function (k) { return { token: k[1], text: k[0] }; }),
-      counts: counts, leaks: leaks, warnings: warnings, secrets: secrets
+      usedSaved: Array.from(usedSaved), counts: counts, leaks: leaks, warnings: warnings, possibleNames: possibleNames, secrets: secrets
     };
   }
 
@@ -325,6 +413,108 @@
     return (secrets || []).filter(function (o) { return new RegExp(termPattern(o), 'iu').test(bare); });
   }
 
-  var api = { scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.2.0' };
+  function nameForms(names) { return Array.isArray(names) ? names : String(names || '').split(',').map(function (n) { return n.trim(); }).filter(Boolean); }
+  function sanitizeLabel(label) { return String(label || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function effectivePeople(opts) {
+    var me = nameForms(opts.me), thread = (opts.thread || []).map(function (r) { return Object.assign({}, r, { names: nameForms(r.names), source: 'thread' }); });
+    var taken = new Set(me.concat(thread.flatMap(function (r) { return r.names; })).map(fold));
+    return [{ names: me, source: 'me', label: 'ME' }].concat(thread, (opts.saved || []).map(function (r, i) {
+      return Object.assign({}, r, { id: r.id || 'saved-' + i, source: 'saved', names: nameForms(r.names).filter(function (n) { return !taken.has(fold(n)); }) });
+    }));
+  }
+  function emptyPreferences() { return { me: '', saved: [], kill: '', excluded: [], nextExcluded: 1 }; }
+  function migratePreferences(saved) {
+    if (!saved || typeof saved.kill !== 'string' || !Array.isArray(saved.excluded)) throw new Error('Invalid preferences');
+    var me = '', people = [];
+    if (Array.isArray(saved.people)) {
+      saved.people.forEach(function (r, i) {
+        if (!r || typeof r.role !== 'string' || typeof r.title !== 'string' || typeof r.names !== 'string') throw new Error('Invalid person');
+        if (r.role === 'Me') me = [me, r.names].filter(Boolean).join(', ');
+        else if (r.names.trim()) people.push({ id: 'migrated-' + i, names: r.names, label: sanitizeLabel(r.title || r.role), lastUsed: '' });
+      });
+    } else {
+      if (typeof saved.me !== 'string' || !Array.isArray(saved.saved)) throw new Error('Invalid preferences');
+      me = saved.me;
+      var ids = new Set();
+      people = saved.saved.map(function (r) {
+        if (!r || typeof r.id !== 'string' || !r.id || ids.has(r.id) || typeof r.names !== 'string' || typeof r.label !== 'string' || typeof r.lastUsed !== 'string' || r.lastUsed && !/^\d{4}-\d{2}-\d{2}$/.test(r.lastUsed)) throw new Error('Invalid saved person');
+        ids.add(r.id); return { id: r.id, names: r.names, label: sanitizeLabel(r.label), lastUsed: r.lastUsed };
+      });
+    }
+    var seen = new Set();
+    var items = saved.excluded.map(function (t, i) { return typeof t === 'string' ? { text: t, n: i + 1 } : { text: t && t.text, n: t && t.n }; });
+    items.forEach(function (t) { if (typeof t.text !== 'string' || !Number.isSafeInteger(t.n) || t.n < 1 || seen.has(t.n)) throw new Error('Invalid exclusion'); seen.add(t.n); });
+    var floor = Math.max.apply(null, [0].concat(items.map(function (t) { return t.n; }))) + 1;
+    return { me: me, saved: people, kill: saved.kill, excluded: items, nextExcluded: Number.isSafeInteger(saved.nextExcluded) ? Math.max(floor, saved.nextExcluded) : floor };
+  }
+  // Pure state helpers are shared by the UI and node acceptance tests. No thread/result persistence.
+  function savePerson(prefs, thread, index) {
+    var person = thread[index]; if (!person || !person.names.trim()) return false;
+    var id = 'saved-1', n = 1; while (prefs.saved.some(function (r) { return r.id === id; })) id = 'saved-' + (++n);
+    prefs.saved.push({ id: id, names: person.names, label: sanitizeLabel(person.label), lastUsed: '' }); thread.splice(index, 1); return true;
+  }
+  function updateLastUsed(prefs, used, date) { prefs.saved.forEach(function (r) { if (used.indexOf(r.id) >= 0) r.lastUsed = date; }); }
+  function searchSaved(people, query) { return people.filter(function (r) { return fold(r.names).includes(fold(query)); }); }
+  function migrationNotice(legacy) { return !!(legacy && legacy.excluded && legacy.excluded.some(function (e) { return typeof e === 'string'; })); }
+  function clearThread(thread) { thread.splice(0); }
+  function forgetPreferences() { return emptyPreferences(); }
+  function demoControls(demo) { return { disabled: demo, title: demo ? 'Leave the demo to manage saved preferences.' : '' }; }
+  var SAMPLE = `From: Quill, Mira T@Paper Lantern@Sampleville <mira@example.com>
+To: Vale, Nolan (Sample Office) <nolan@example.com>
+Cc: Lyra Finch | Fictional Widgets <lyra@example.com>
+Sent: March 27, 2026 09:00
+Subject: Project Lantern and the March 28 deadline
+
+Hi Nolan,
+
+Please tell Andre that the draft is ready.
+We can keep the whole reply chain for review.
+The March 28 deadline remains unchanged.
+Project Lantern is a fictional project.
+The internal note is sample-private.
+Account number: DEMO12345
+Demo SIN: 046 454 286
+Demo SSN: 123-45-6789
+Demo payment test card: 4111 1111 1111 1111
+See https://example.com/sample for the fictional agenda.
+
+Regards,
+Mira Quill
+Coordinator / Coordonnatrice
+Fictional Widgets / Atelier fictif
+613-555-0100 ext. 222
+123 Imaginary Street
+Sampleville, ON K1A 0B1
+
+CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intended recipient, notify the sender and delete this message.
+
+---------- Forwarded message ----------
+> From: Vale, Nolan (Sample Office) <nolan@example.com>
+> To: Quill, Mira T@Paper Lantern@Sampleville <mira@example.com>
+> Sent: 26 mars 2026 14:00
+> Subject: Projet fictif
+>
+> Bonjour Mira,
+>
+> Le rendez-vous du 28 mars convient.
+> Appelez au 613-555-0101 poste 123.
+> Nous gardons toutes les réponses dans ce fil.
+>
+> Cordialement,
+> Nolan Vale
+> Conseiller / Adviser
+>
+>> From: Lyra Finch | Fictional Widgets <lyra@example.com>
+>> To: Nolan Vale <nolan@example.com>
+>> Sent: March 25, 2026 10:00
+>> Subject: First fictional draft
+>>
+>> Hello Nolan,
+>> The fictional draft is attached as plain text.
+>> There are no real people or organisations here.
+>> Cheers,
+>> Lyra Finch`;
+
+  var api = { sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.4.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

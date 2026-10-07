@@ -15,6 +15,8 @@ try {
   await p.goto(url);
   assert(await p.isHidden('#js'), 'page script did not start');
   await p.fill('#input', thread);
+  await p.click('#add-person');
+  await p.locator('#roles input.labin').first().fill('CLIENT');
   await p.locator('#roles input.names').first().fill('Adaeze Okafor, Adaeze');
   await p.fill('#kill', 'Invoice 4471');
   await p.click('#go');
@@ -29,16 +31,18 @@ try {
   // Note off
   await p.uncheck('#note'); await p.click('#go'); assert(!(await p.textContent('#out')).startsWith('Note:'));
   // Persist configuration only, never the raw thread or scrubbed result.
-  const prefs = await p.evaluate(() => JSON.parse(localStorage.getItem('email-scrub.preferences.v1')));
+  const prefs = await p.evaluate(() => JSON.parse(localStorage.getItem('email-scrub.preferences.v3')));
   assert.equal(prefs.kill, 'Invoice 4471'); assert(!JSON.stringify(prefs).includes('clause 12.1.3'));
-  assert.equal(prefs.people[0].names, 'Adaeze Okafor, Adaeze');
+  assert.deepEqual(prefs.saved, []); assert(!JSON.stringify(prefs).includes('Adaeze'));
+  await p.locator('#roles button').filter({hasText:/^Save$/}).click();
   assert.equal(await p.evaluate(() => sessionStorage.length), 0);
   await p.reload(); assert.equal(await p.inputValue('#input'), ''); assert(await p.isHidden('#res'));
-  assert.equal(await p.locator('#roles input.names').first().inputValue(), 'Adaeze Okafor, Adaeze');
+  assert.equal(await p.locator('#roles .role-row').count(), 0);
+  assert((await p.textContent('#saved-people')).includes('Adaeze Okafor, Adaeze'));
   // Every row has an editable title and role; add more than the old seven slots.
-  assert.equal(await p.locator('#roles select').first().locator('option').count(), 10);
+  assert.equal(await p.locator('#roles select').count(), 0);
   for (let i = 0; i < 6; i++) await p.click('#add-person');
-  assert.equal(await p.locator('.role-row').count(), 10);
+  assert.equal(await p.locator('.role-row').count(), 6);
   const person = p.locator('.role-row').last();
   await person.locator('.names').fill('Zorvex Quill'); await person.locator('.labin').fill('Team lead');
   await p.fill('#input', 'Zorvex Quill sent Project Cobalt. Project Cobalt stays secret.'); await p.click('#go');
@@ -60,6 +64,7 @@ try {
   await highlight('Project Cobalt');
   assert(!(await p.textContent('#out')).includes('Project Cobalt')); assert((await p.textContent('#out')).includes('<EXCLUDED-1>'));
   await p.click('#copy'); assert.equal(await p.evaluate(() => navigator.clipboard.readText()), await p.textContent('#out'));
+  await person.locator('button').filter({hasText:/^Save$/}).click();
   await p.reload(); assert.equal(await p.inputValue('#input'), '');
   await p.fill('#input', 'Project Cobalt and Zorvex Quill again.'); await p.click('#go');
   assert(!(await p.textContent('#out')).includes('Project Cobalt')); assert((await p.textContent('#out')).includes('<TEAM-LEAD>'));
@@ -68,7 +73,7 @@ try {
   // Multiline selection, markup injection remains literal, fragments are removed everywhere.
   await p.fill('#input', 'privatecode and privatecode.\nLine one\nLine two\n<img src=x onerror=alert(1)>'); await p.click('#go');
   assert.equal(await p.locator('#out img').count(), 0);
-  await highlight('vatecode'); assert(!(await p.textContent('#out')).includes('vatecode'));
+  await highlight('privatecode'); assert(!(await p.textContent('#out')).includes('privatecode'));
   await highlight('Line one\nLine two'); assert(!(await p.textContent('#out')).includes('Line two'));
   // Existing placeholders must not become saved private terms.
   await p.evaluate(() => { const node = document.querySelector('#out .t').firstChild; const range = document.createRange(); range.selectNodeContents(node); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); });
@@ -78,9 +83,10 @@ try {
   assert(!(await p.textContent('#saved-terms')).includes('Project Cobalt'));
   // Clear wipes the thread/result but keeps configured people and exclusions
   await p.click('#clear'); assert(await p.isHidden('#res')); assert.equal(await p.inputValue('#input'), '');
-  assert.equal(await p.locator('#roles input.names').first().inputValue(), 'Adaeze Okafor, Adaeze');
-  await p.click('#forget'); assert.equal(await p.evaluate(() => localStorage.getItem('email-scrub.preferences.v1')), null);
-  await p.reload(); assert.equal(await p.locator('#roles input.names').first().inputValue(), '');
+  assert.equal(await p.locator('#roles .role-row').count(), 0);
+  assert((await p.textContent('#saved-people')).includes('Adaeze Okafor, Adaeze'));
+  await p.click('#forget'); assert.equal(await p.evaluate(() => localStorage.getItem('email-scrub.preferences.v3')), null);
+  await p.reload(); assert.equal(await p.locator('#roles .role-row').count(), 0);
   // Phone width: no sideways scroll
   await p.setViewportSize({ width: 375, height: 800 }); await p.fill('#input', thread); await p.click('#go');
   assert(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'horizontal scroll at 375px');
@@ -90,5 +96,5 @@ try {
   await p.evaluate(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); }, configurable: true }); });
   await p.fill('#kill', 'Harbourline Logistics'); await p.click('#go');
   assert((await p.textContent('#storage-status')).includes('unavailable')); assert(await p.isVisible('#res'));
-  console.log('PASS browser: highlighting + repeated/fragments/multiline, persisted roles/titles/exclusions, no stored threads, add/remove/forget, copy matches, stale output hidden, storage blocked, 375px, zero network/errors');
+  console.log('PASS browser: highlighting + repeated/fragments/multiline, persisted saved people/labels/exclusions, no stored threads, add/remove/forget, copy matches, stale output hidden, storage blocked, 375px, zero network/errors');
 } finally { await b.close(); }

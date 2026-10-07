@@ -9,11 +9,15 @@ Working name; not final.
 ## Use it
 
 1. Download [`email-scrub.html`](email-scrub.html) and double-click it.
-2. Paste a thread (or open a `.txt` file).
-3. Optional: under **Who's who**, enter the people and organisations that matter to you. Their names
-   become the role everywhere: `<CLIENT>`, `<BOSS>`, `<VENDOR>` or any custom title. Every row has a dropdown and editable title; add/remove as many people as needed. Two people with the same role get different placeholders, such as `<BOSS>` and `<BOSS-2>`.
+2. Paste a thread (or open a `.txt` file), or click **Try a sample** for a fictional demonstration that leaves your saved preferences unchanged.
+3. Optional: under **Who's who**, set **Me** once (comma-separated name forms). It always becomes `<ME>`.
+   Add a person under **This thread**, with an optional label such as `GRIEVOR`; without a label they become
+   `<PERSON-n>` in first-appearance order alongside discovered people. **Save** moves that row into **Saved people**.
+   Saved people apply to every scrub, can be searched without case/accent distinctions, and show only the date last used.
+   Me is matched first; a this-thread name form wins over the same saved form. Labelled people occupy the same
+   numbering sequence, and reserved numbers are skipped to avoid collisions.
 4. Optional: under **Always remove**, list anything else that identifies people or the business.
-5. Press **Scrub**, read it over, then highlight remaining private text in **Check and copy** and click **Remove highlighted text**. All matching occurrences become `<EXCLUDED-1>` etc.; fragments and multiline passages work too.
+5. Press **Scrub**, read it over, then highlight remaining private text in **Check and copy** and click **Remove highlighted text**. All matching occurrences become `<EXCLUDED-1>` etc.; selections ending in letters/digits respect word boundaries; punctuation fragments and multiline passages work too. All-letter selections of three characters or fewer are case-sensitive. Numbers stay stable when other exclusions are added or forgotten.
 6. Press **Copy**. The clipboard contains the actual scrubbed text, not a visual overlay.
 
 The AI's reply comes back with the same placeholders. Put the real names back as you paste it into
@@ -24,7 +28,8 @@ your email. The page shows which placeholder stands for whom; that list never le
 | Found | Becomes |
 | --- | --- |
 | People in From/To/Cc lines, "On ... wrote:" lines, greetings, sign-offs, signatures, titles (Mr, Ms, Dr, Me, Mme) and full names in the text | `<PERSON-1>`, `<PERSON-2>`... one number per person, every form of their name |
-| Names you enter under Who's who | `<CLIENT>`, `<BOSS>`, your label |
+| Generic header display-name decorations | `<ORG-1>`, `<ORG-2>`... shared for the same decoration |
+| Names you enter under Who's who | `<ME>`, your label, or `<PERSON-n>` |
 | Your Always remove terms | `<TERM-1>`... |
 | Email addresses, web links | `<EMAIL>`, `<URL>` |
 | Phone numbers (North American and international, with extensions) | `<PHONE>` |
@@ -37,9 +42,11 @@ your email. The page shows which placeholder stands for whom; that list never le
 It keeps what the reply needs: times, amounts, clause and section numbers, invoice numbers, job
 titles and ordinary words. A note at the top (optional) asks the AI to keep the placeholders as they are.
 
-Before **Copy** unlocks, a leak check confirms that nothing it removed is still in the text. It also
+Before **Copy** unlocks, a leak check looks for removed details still in the text. Passing it does not prove anonymity. It also
 warns when an organisation named in the email addresses is still mentioned, or when something that
 looks like part of a phone number or address is left.
+
+Possible first names left in prose are warned, with a **Remove** button for each. These warnings do not block Copy. Month names followed by a year are treated as date context. The five **?** buttons and **Help** dialog explain the controls and limits. Native popovers require a recent browser.
 
 ## What it does not do
 
@@ -54,15 +61,19 @@ looks like part of a phone number or address is left.
 
 ## Saved people and exclusions
 
-The ten relative roles are Client, Boss, Vendor, Me, Colleague, Employee, Partner, Customer, Adviser,
-and My company. A custom title overrides the dropdown. Names, titles, Always remove terms and
-highlighted exclusions accumulate in this browser only. They are **not encrypted**; anyone with
-access to the browser profile may be able to read them. Pasted threads and scrubbed results stay
-in memory and are never written to localStorage or sessionStorage.
+Only **Me**, **Saved people**, Always remove terms and highlighted exclusions are remembered in this browser.
+They are **not encrypted**. This-thread rows, pasted threads, results and replacement maps stay in memory.
+The saved-person structure is `{id, names, label, lastUsed}`; `lastUsed` holds a local date only and changes when
+that person's name is actually replaced. Preferences use `email-scrub.preferences.v3` with `me`, `saved`, `kill`,
+`excluded` and `nextExcluded`. Older role rows migrate into Me/Saved people, with custom titles retained as labels.
+Old keys are removed only after the migrated store is written. A separate notice-state key holds only
+`pending`/`dismissed` for the older whole-word exclusion reminder, never any thread information.
 
-**Clear current thread** keeps your configuration. **Forget saved people and exclusions** erases
-this app's saved configuration without touching other browser data. Individual highlighted terms
-can be forgotten in the remembered-exclusions list; people can be removed or edited.
+**Clear current thread** empties its rows, input and result, keeping Me and Saved people. **Forget saved people
+and exclusions** erases remembered preferences and exclusions. It is disabled during the fictional demo;
+Clear or editing the input exits the demo and restores real preferences. Individual saved people can be edited or removed;
+individual highlighted terms can be forgotten. After migrating string exclusions from v1, a one-time reminder links to
+that list: fragments now match whole words only and cannot be automatically repaired without the original text.
 
 Keep the HTML file at the same location when updating it. Browser storage for a directly opened
 `file:` URL varies by browser and policy; moving the file, changing browsers, private mode or
@@ -80,12 +91,20 @@ sent. The whole program is the readable code inside `email-scrub.html`, and it h
 
 ```
 python3 build.py          # src/app.html + src/lists.js + src/engine.js -> email-scrub.html
+node tests/v03.test.js    # v0.3 regressions (version expectation updated)
+node tests/v04.test.js    # v0.4 people/migration/review acceptance
 node tests/engine.test.js # synthetic Outlook (EN/FR) and Gmail threads, guards, leak check
 node tests/browser.test.mjs   # real browser: highlighting, persistence, no stored threads, copy, blocked storage, no network (needs Playwright)
 ```
 
 Rules go in `src/engine.js`; word lists go in `src/lists.js`. Test threads are invented; never add a
 real email to the tests.
+
+Browser acceptance and network capture: `BROWSER_CHANNEL=chrome` or `msedge` with
+`tests/browser.test.mjs`, `tests/v03-browser.test.mjs` and `tests/v04-browser.test.mjs`.
+Installed Firefox uses `tests/firefox.test.mjs` with `geckodriver --port 4445 --websocket-port 9237`.
+These are developer test tools only; recipients need no runtime libraries or build step.
+See [v0.4 checklist](tests/V04-CHECKLIST.md) for the manual items and verification limits.
 
 ## Licence
 

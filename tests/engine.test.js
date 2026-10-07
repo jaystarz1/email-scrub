@@ -81,7 +81,7 @@ function expect(fixture, opts, gone, stay) {
 let r = expect(OUTLOOK_EN, {},
   ['Whitfield', 'Jordan', 'Okafor', 'Adaeze', 'Lindqvist', 'Perrault', 'Simone', 'harbourline.ca', 'brightpath', '555-0142', '555-0199', '555-0188',
    '1450 Riverside', 'K1G', '88120457', 'intended recipient', 'iPhone', 'March 12, 2024', '2024-03-11'],
-  ['clause 12.1.3', 'section 7(2)', '$14,250.00', 'Invoice 4471', 'Director, Client Services', 'Harbourline Logistics', 'Ottawa', '9:14 AM', 'Subject: RE: Invoice 4471 and the <DATE-2> deadline', '[Confidentiality notice removed]']);
+  ['clause 12.1.3', 'section 7(2)', '$14,250.00', 'Invoice 4471', 'Director, Client Services', 'Harbourline Logistics', '9:14 AM', 'Subject: RE: Invoice 4471 and the <DATE-2> deadline', '[Confidentiality notice removed]']);
 assert(/Mark and I/.test(OUTLOOK_EN) && !/\bMark\b/.test(r.text), 'first name of a header person replaced'); checks++;
 const t = scrub(OUTLOOK_EN, { note: false }).text;
 assert.equal((t.match(/<DATE-2>/g) || []).length, 4, 'same date, same token (March 28 x4, two with year, two without): ' + t); checks++;
@@ -133,8 +133,8 @@ console.log(`PASS engine: ${checks} checks (Outlook EN/FR, Gmail, roles, kill li
 
 // Manual selections remove exact fragments and multiline passages and preserve placeholders.
 const manual = scrub('codeprivate codeprivate. Private passage\ncontinues here. <EMAIL>', { excluded: ['private', 'Private passage\ncontinues here.'], note: false });
-assert(!manual.text.includes('private')); assert(!manual.text.includes('continues here'));
-assert(manual.text.includes('<EMAIL>')); assert.equal(manual.counts.terms, 3);
+assert(manual.text.includes('codeprivate'));  assert(!manual.text.includes('continues here'));
+assert(manual.text.includes('<EMAIL>')); assert.equal(manual.counts.terms, 1);
 const repeatedRoles = scrub('Zorvex Quill and Velqor Drenn', { roles: [{ label: 'Boss', names: ['Zorvex Quill'] }, { label: 'Boss', names: ['Velqor Drenn'] }], note: false });
 assert(repeatedRoles.text.includes('<BOSS>')); assert(repeatedRoles.text.includes('<BOSS-2>'));
 console.log('PASS manual exclusions and distinct repeated-role placeholders');

@@ -16,14 +16,16 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}
 label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
 input[type=text],textarea,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--card);color:var(--ink)}
 textarea{font:13px/1.5 Consolas,ui-monospace,monospace}
-.role-row{display:grid;grid-template-columns:140px 180px 1fr auto;gap:8px;margin-bottom:8px;align-items:center}
+.role-row{display:grid;grid-template-columns:1fr 180px auto auto;gap:8px;margin-bottom:8px;align-items:center}
 .saved-term{display:flex;gap:8px;align-items:center;margin:6px 0;overflow-wrap:anywhere}.saved-term span{flex:1;white-space:pre-wrap}
+.saved-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}.saved-editor input{grid-column:1/-1;min-width:0}.saved-editor button{white-space:nowrap;overflow-wrap:normal}
 #selection-status{color:var(--muted)}
 .roles .lab{font-weight:600}
 .roles input.labin{font-weight:600}
 button{font:inherit;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 button.big{font-size:17px;padding:10px 26px}
+.help-button{border-radius:50%;padding:0;width:26px;height:26px;margin-left:8px} [popover],dialog{max-width:min(680px,90vw);background:var(--card);color:var(--ink);border:1px solid var(--line);padding:20px;border-radius:8px}dialog::backdrop{background:#0008}
 button:disabled{opacity:.45;cursor:default}
 .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
@@ -39,42 +41,50 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 @media (max-width:560px){.role-row{grid-template-columns:1fr}.roles .lab,.roles input.labin{margin-top:6px}}
 </style></head><body><main>
 <h1>Email Thread Scrubber</h1>
-<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access. People and exclusions are saved only in this browser; pasted threads and results are never saved.</p>
+<button id="help-open">Help</button>
+<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access. Only Me, Saved people and exclusions are saved in this browser; pasted threads and results are never saved.</p>
 <p id="js" class="status bad">JavaScript is off, so this page cannot run.</p>
 
 <section class="card">
-  <h2>1. Paste the thread</h2>
+  <h2>1. Paste the thread <button class="help-button" popovertarget="help-1" aria-label="Help for section 1">?</button></h2>
+  <button id="demo">Try a sample</button>
   <label for="input">Email thread or any text</label>
   <textarea id="input" rows="10" placeholder="Paste here" autofocus></textarea>
   <div class="bar" style="margin-top:8px"><label for="file" style="margin:0">or open a .txt file</label><input type="file" id="file" accept=".txt,text/plain"></div>
 </section>
 
 <section class="card">
-  <h2>2. Who's who (optional)</h2>
-  <p class="sub" style="margin-bottom:10px">Names you enter become the role, everywhere: <code>&lt;CLIENT&gt;</code> reads better than <code>&lt;PERSON-3&gt;</code>. Separate forms with commas, e.g. <i>Robert Smith, Bob</i>. Everyone else is found and numbered automatically.</p>
-  <div class="roles" id="roles"></div>
+  <h2>2. Who's who (optional) <button class="help-button" popovertarget="help-2" aria-label="Help for section 2">?</button></h2>
+  <p class="sub">Separate name forms with commas. Me always becomes &lt;ME&gt;. Other people are numbered by first appearance unless you give them a label.</p>
+  <label for="me">Me (remembered): your name and alternate forms</label><input type="text" id="me" autocomplete="off" placeholder="Your full name, nickname, initials">
+  <h3>This thread</h3><div class="roles" id="roles"></div>
   <button id="add-person">Add person</button>
-  <p class="sub">Choose a relative role or type a custom title for any person. People sharing a role get separate numbered placeholders.</p>
+  <p class="sub">These people apply to this thread only. Save moves a person into your remembered list.</p>
+  <details id="saved-people-panel"><summary id="saved-people-summary">Saved people (0)</summary>
+    <label for="saved-search">Search saved names</label><input type="text" id="saved-search" autocomplete="off">
+    <div id="saved-people"></div>
+  </details>
 </section>
 
 <section class="card">
-  <h2>3. Always remove (optional)</h2>
+  <h2>3. Always remove (optional) <button class="help-button" popovertarget="help-3" aria-label="Help for section 3">?</button></h2>
   <label for="kill">One per line: project names, account names, anything else that identifies the people or business</label>
   <textarea id="kill" rows="3"></textarea>
-  <details><summary>Remembered highlighted exclusions</summary><div id="saved-terms"></div></details>
+  <details id="exclusions-panel"><summary>Remembered highlighted exclusions</summary><div id="saved-terms"></div></details>
+  <p id="migration-notice" class="warn" hidden>Saved exclusions from older versions now match whole words only. <a href="#exclusions-panel" id="check-exclusions">Check the list.</a> <button id="dismiss-notice">Dismiss</button></p>
   <p id="storage-status" class="sub" role="status"></p>
   <div class="bar" style="margin-top:12px">
     <button id="go" class="primary big">Scrub</button>
     <button id="clear">Clear current thread</button>
     <button id="forget">Forget saved people and exclusions</button>
-    <label style="display:inline;margin:0;color:var(--ink)"><input type="checkbox" id="note" checked> Add a note asking the AI to keep the placeholders</label>
+    <label style="display:inline;margin:0;color:var(--ink)"><input type="checkbox" id="note" checked> Add a note asking the AI to keep the placeholders</label><button class="help-button" popovertarget="help-5" aria-label="Help for AI note">?</button>
   </div>
 </section>
 
 <section class="card" id="res" hidden>
-  <h2>4. Check and copy</h2>
+  <h2><span id="results-title">4. Check and copy</span> <button class="help-button" popovertarget="help-4" aria-label="Help for section 4">?</button></h2>
   <div class="chips" id="counts"></div>
-  <div id="leak"></div>
+  <div id="leak"></div><div id="possible-names" class="warn" role="status"></div>
   <details id="people-box"><summary id="people-sum">People found</summary><ul class="people" id="people"></ul></details>
   <p class="sub">Highlight any remaining private text below, then remove it. All matching occurrences are replaced, and the exclusion is remembered for future threads. Select original text only, without placeholders.</p>
   <div class="bar"><button id="exclude" disabled>Remove highlighted text</button><span id="selection-status" role="status"></span></div>
@@ -84,6 +94,16 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 </section>
 
 <footer>Version <span id="ver"></span> · Runs entirely in your browser · Blocked from the network by its own security policy · Apache-2.0 licence</footer>
+
+<div id="help-1" popover>Paste the complete thread, or open a plain text file. Try a sample uses fictional data without changing your saved preferences.</div><div id="help-2" popover>Set Me once. Add people for this thread with an optional label, or Save them for every scrub. Saved people can be searched, edited or removed. Unlabelled people are numbered by first appearance.</div><div id="help-3" popover>Enter one identifying term per line. Highlighted exclusions are remembered separately; Forget removes them from future runs.</div><div id="help-4" popover>Review the result and any warnings before copying. Highlight remaining private text or use Remove beside a possible name; warnings alone do not block Copy.</div><div id="help-5" popover>This note asks the AI to preserve placeholders in its reply. It does not guarantee that the AI will follow the instruction.</div><dialog id="help-dialog" aria-labelledby="help-title"><h2 id="help-title">Help: what to check</h2>
+<p><b>What is caught automatically:</b> names in headers, greetings and sign-offs; emails; phones; dates; addresses; ID numbers; links; confidentiality notices.</p>
+<p><b>What is not reliably caught:</b> single names in prose, nicknames, and context that identifies someone without naming them. Possible-name warnings cover some of this; read the full result.</p>
+<p><b>People versus Always remove:</b> Me becomes &lt;ME&gt;. This thread and Saved people use an optional label or &lt;PERSON-n&gt;. Me is matched first; this-thread names take precedence over the same saved name forms. Always remove handles project names, organisations or any other identifying terms, one per line.</p>
+<p><b>The leak check:</b> it checks whether details selected for removal still appear. Passing it is not proof of anonymity. “I checked: copy anyway” lets you copy despite a known match; review why it remains first.</p>
+<p><b>Preferences:</b> only Me, Saved people, Always remove terms and highlighted exclusions are stored in this browser’s local storage and are not encrypted. This-thread people, threads, results and replacement maps are not saved. Saved people show only the date last used, updated when a name is actually replaced. Clear current thread removes its people but keeps Me and Saved people. Save moves a row into Saved people. Search ignores case and accents. Forget is disabled during the sample; leave the sample first. Use Forget saved people and exclusions to erase preferences. If this computer is shared, use Forget when you're done.</p>
+<p><b>Check it yourself:</b> open the browser’s developer tools, go to the Network tab, run a scrub, and confirm nothing is sent.</p>
+<p><b>Using the AI’s reply:</b> placeholders come back in the reply; swap the real names in before sending.</p>
+<button id="help-close" type="button">Close help</button></dialog>
 </main>
 
 <script>/* Word lists for email-scrub. Lists grow; rules in engine.js should not.
@@ -94,7 +114,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 (function (root) {
   'use strict';
   var api = {
-    commonEN: [
+    commonEN: ["tell",
     "a", "about", "above", "after", "again", "against", "all", "almost", "along", "already", "also", "although",
     "always", "am", "among", "an", "and", "another", "any", "anyone", "anything", "are", "around", "as", "at",
     "back", "based", "be", "because", "been", "before", "being", "below", "best", "better", "between", "beyond",
@@ -120,7 +140,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     "whereby", "wherein", "whether", "which", "while", "who", "whom", "whose", "why", "will", "with", "within",
     "without", "would", "yes", "yet", "you", "your", "yours"
     ],
-    commonFR: [
+    commonFR: ["dis", "dites",
     "a", "afin", "ainsi", "alors", "apres", "au", "aucun", "aucune", "aupres", "aussi", "autant", "autre", "autres",
     "aux", "avant", "avec", "avoir", "bien", "car", "ce", "ceci", "cela", "celle", "celles", "celui", "cependant",
     "certain", "certaine", "certaines", "certains", "ces", "cet", "cette", "ceux", "chacun", "chaque", "chez",
@@ -230,6 +250,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
   function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   var COMMON = new Set(L.commonEN.concat(L.commonFR, L.months, L.notNames).map(fold));
   var FIRST = new Set(L.firstNames.map(fold));
+  var MONTH_WORDS = new Set(L.months.map(fold));
   var WORDLIKE_FIRST = new Set(L.wordlikeFirstNames.map(fold));
   var CAP = '\\p{Lu}[\\p{L}\'’-]*';                       // Capitalized word (also McKay, O'Neil, Jean-Luc)
   var NB = '(?<![\\p{L}\\p{N}])', NA = '(?![\\p{L}\\p{N}])';
@@ -324,7 +345,25 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     opts = opts || {};
     var text = String(input || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ');
     var counts = { emails: 0, phones: 0, dates: 0, addresses: 0, postal: 0, urls: 0, ids: 0, names: 0, terms: 0, roles: 0, disclaimers: 0 };
-    var warnings = [], originals = [];
+    var warnings = [], originals = [], decorations = new Map();
+    // Header decorations are generic display metadata, never separate people.
+    HEADER.lastIndex = 0;
+    text = text.replace(HEADER, function (whole, label, value) {
+      var cleaned = value.replace(/([^;<>\n]+)(?=\s*<[^>]*@[^>]*>|$)/g, function (display) {
+        var d = /(@[^<>]+|\([^)]*\)(?:.*)|\[[^\]]*\](?:.*)|\|.*)$/.exec(display);
+        if (!d) return display;
+        var name = display.slice(0, d.index).trim().replace(/^"|"$/g, '');
+        if (!parseName(name)) return display;
+        var decoration = d[0].trim().replace(/"$/, '');
+        if (!decorations.has(decoration)) decorations.set(decoration, '<ORG-' + (decorations.size + 1) + '>');
+        originals.push(decoration);
+        name = name.replace(/^(\p{Lu}[\p{L}'’-]+,\s*\p{Lu}[\p{L}'’-]+)\s+\p{Lu}\.?$/u, '$1');
+        return (display.match(/^\s*/) || [''])[0] + name + ' ' + decorations.get(decoration) + ' ';
+      });
+      // A bare middle initial belongs to Last, First even without decoration.
+      cleaned = cleaned.replace(/(\p{Lu}[\p{L}'’-]+,\s*\p{Lu}[\p{L}'’-]+)\s+\p{Lu}\.?(?=\s*(?:<|;|$))/gu, '$1');
+      return whole.slice(0, whole.length - value.length) + cleaned;
+    });
 
     // 0. noise: inline image references and phone sign-offs
     text = text.replace(/\[cid:[^\]]*\]/gi, '').replace(/^[ \t>]*(?:Sent from my \w+|Get Outlook for \w+|Envoyé de mon \w+|Envoyé à partir de \w+.*)[ \t]*$/gmi, '');
@@ -369,7 +408,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     HEADER.lastIndex = 0;
     while ((m = HEADER.exec(text))) {
       if (m[1] === 'A' && !/@/.test(m[2])) continue;
-      var line = m[2];
+      var line = m[2].replace(/<ORG-\d+>/g, '');
       var pair = /(?:"?([^"<>;\n]+?)"?\s*)?(?:<|\[mailto:)([^<>\s\]]+@[^<>\s\]]+)(?:>|\])/g, pm, seen = false;
       while ((pm = pair.exec(line))) {
         seen = true; var em = pm[2].toLowerCase(), disp = (pm[1] || '').replace(/^[,;\s]+/, '');
@@ -399,30 +438,54 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
         addPerson({ first: m[1], last: m[2] }, 'text');
     }
 
-    // 2. roles: the user's names collapse to the role token; a detected person who matches joins the role
-    var usedLabels = new Set();
-    var roles = (opts.roles || []).filter(function (r) { return r && r.label && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
-      var label = String(r.label).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ROLE';
-      var base = label, suffix = 1;
-      while (usedLabels.has(label)) label = base + '-' + (++suffix);
-      usedLabels.add(label);
-      return { token: '<' + label + '>', names: r.names.map(function (n) { return n.trim(); }).filter(Boolean) };
+    // All configured sources use the same person shape. Legacy roles remain an API compatibility path.
+    var modern = opts.me !== undefined || opts.thread !== undefined || opts.saved !== undefined;
+    var usedLabels = new Set(['ME']), usedSaved = new Set();
+    var configured = modern ? effectivePeople(opts) : (opts.roles || []).map(function (r) { return Object.assign({ source: 'legacy' }, r); });
+    var roles = configured.filter(function (r) { return r && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
+      var label = sanitizeLabel(r.label), token = null;
+      if (r.source === 'me') token = '<ME>';
+      else if (label) {
+        var base = label, suffix = 1;
+        while (usedLabels.has(label)) label = base + '-' + (++suffix);
+        usedLabels.add(label); token = '<' + label + '>';
+      }
+      return { token: token, names: r.names.map(function (n) { return n.trim(); }).filter(Boolean), source: r.source, id: r.id };
     });
-    var roleParts = [];   // [foldedName, token]
+    function firstAt(names) {
+      return Math.min.apply(null, names.map(function (name) { var hit = new RegExp(termPattern(name), 'iu').exec(text); return hit ? hit.index : Infinity; }));
+    }
+    var roleParts = [];
     roles.forEach(function (r) {
-      r.names.forEach(function (n) {
-        roleParts.push([fold(n), r.token]);
-        var p = parseName(n);
-        if (p && p.last) roleParts.push([fold(p.last), r.token]);
-        if (p && p.first && p.last) roleParts.push([fold(p.first), r.token]);
+      r.at = firstAt(r.names);
+      r.names.forEach(function (name) {
+        roleParts.push([fold(name), r]);
+        var parsed = parseName(name);
+        if (parsed && parsed.last) roleParts.push([fold(parsed.last), r]);
+        if (parsed && parsed.first && parsed.last) roleParts.push([fold(parsed.first), r]);
       });
     });
     function roleFor(name) { var f = fold(name); var hit = roleParts.find(function (x) { return x[0] === f; }); return hit ? hit[1] : null; }
-    var n = 0;
-    people.sort(function (a, b) { return a.order - b.order; }).forEach(function (p) {
-      p.token = (p.last && roleFor(p.last)) || (p.first && p.last && roleFor(p.first + ' ' + p.last)) || (!p.last && p.first && roleFor(p.first)) || null;
-      if (!p.token) p.token = '<PERSON-' + (++n) + '>';
+    people.forEach(function (p) {
+      // Full forms before inferred surname aliases prevent a short surname stealing a configured full name.
+      p.owner = (p.first && p.last && roleFor(p.first + ' ' + p.last)) || (p.last && roleFor(p.last)) || (!p.last && p.first && roleFor(p.first)) || null;
+      p.at = firstAt([p.first && p.last ? p.first + ' ' + p.last : '', p.first && p.last ? p.last + ', ' + p.first : '', p.last, p.first].filter(Boolean));
+      if (p.owner) p.owner.at = Math.min(p.owner.at, p.at);
     });
+    var n = 0;
+    function numbered() { var label; do { label = 'PERSON-' + (++n); } while (usedLabels.has(label)); usedLabels.add(label); return '<' + label + '>'; }
+    if (modern) {
+      var identities = roles.concat(people.filter(function (p) { return !p.owner; }));
+      identities.sort(function (a, b) { return a.at - b.at; }).forEach(function (p) {
+        if (p.source === 'me') return;
+        if (!p.token) p.token = numbered();
+        else if (p.at !== Infinity) n++; // Labelled people occupy the same appearance sequence.
+      });
+    }
+    people.sort(function (a, b) { return modern ? a.at - b.at : a.order - b.order; }).forEach(function (p) {
+      p.token = p.owner ? p.owner.token : (p.token || numbered());
+    });
+    function markUsed(token) { roles.forEach(function (r) { if (r.token === token && r.source === 'saved') usedSaved.add(r.id); }); }
 
     // 3. disclaimers (whole paragraph)
     text = text.split(/\n\s*\n/).map(function (para) {
@@ -441,23 +504,33 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     text = outside(text, URL, function (u) { counts.urls++; return '<URL>'; });
 
     // 5. the kill list, then role names the user typed (longest first)
-    var killTokens = [];
-    // Explicit selections also remove fragments and multiline passages, outside existing tokens.
-    (opts.excluded || []).map(function (t) { return String(t).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (term, i) {
-      var tok = '<EXCLUDED-' + (i + 1) + '>'; killTokens.push([term, tok]); originals.push(term);
-      var literal = termPattern(term).slice(NB.length, -NA.length);
-      text = outside(text, new RegExp(literal, 'giu'), function () { counts.terms++; return tok; });
+    var killTokens = [], exclusionPatterns = new Map();
+    // Stable IDs are independent of matching order. Short letter selections retain case.
+    (opts.excluded || []).map(function (t, i) { return typeof t === 'string' ? { text: t.trim(), n: i + 1 } : { text: String(t.text || '').trim(), n: t.n }; }).filter(function (t) { return t.text; }).sort(function (a, b) { return b.text.length - a.text.length; }).forEach(function (item) {
+      var term = item.text, tok = '<EXCLUDED-' + item.n + '>'; killTokens.push([term, tok]);
+      var short = /^\p{L}{1,3}$/u.test(term);
+      var literal = short ? esc(term) : termPattern(term).slice(NB.length, -NA.length);
+      if (/^[\p{L}\p{N}]/u.test(term)) literal = NB + literal;
+      if (/[\p{L}\p{N}]$/u.test(term)) literal += NA;
+      var pattern = new RegExp(literal, short ? 'gu' : 'giu');
+      exclusionPatterns.set(fold(term), new RegExp(literal, short ? 'u' : 'iu'));
+      // Only matched originals feed the leak gate; an unmatched case-sensitive term is not a leak.
+      text = outside(text, pattern, function (match) { originals.push(match); counts.terms++; return tok; });
     });
-    (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (k, i) {
-      var tok = '<TERM-' + (i + 1) + '>'; killTokens.push([k, tok]); originals.push(k);
+    (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).map(function (k, i) { return { text: k, n: i + 1 }; }).sort(function (a, b) { return b.text.length - a.text.length; }).forEach(function (item) {
+      var k = item.text, tok = '<TERM-' + item.n + '>'; killTokens.push([k, tok]); originals.push(k);
       text = outside(text, new RegExp(termPattern(k), 'giu'), function () { counts.terms++; return tok; });
     });
     var roleStrings = [];
     roles.forEach(function (r) { r.names.forEach(function (nm) { roleStrings.push([nm, r.token]); }); });
     people.forEach(function (p) { if (/^<PERSON-/.test(p.token)) return; if (p.first && p.last) roleStrings.push([p.first + ' ' + p.last, p.token], [p.last + ', ' + p.first, p.token]); });
-    roleStrings.sort(function (a, b) { return b[0].length - a[0].length; }).forEach(function (x) {
+    roleStrings.sort(function (a, b) {
+      if (modern) { var ar = roles.findIndex(function (r) { return r.token === a[1]; }), br = roles.findIndex(function (r) { return r.token === b[1]; });
+        var ap = roles[ar].source === 'me' ? 0 : roles[ar].source === 'thread' ? 1 : 2, bp = roles[br].source === 'me' ? 0 : roles[br].source === 'thread' ? 1 : 2; if (ap !== bp) return ap - bp; }
+      return b[0].length - a[0].length;
+    }).forEach(function (x) {
       originals.push(x[0]);
-      text = outside(text, new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu'), function (mm, poss) { counts.roles++; return x[1] + (poss || ''); });
+      text = outside(text, new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu'), function (mm, poss) { counts.roles++; markUsed(x[1]); return x[1] + (poss || ''); });
     });
 
     // 6. structured identifiers
@@ -470,6 +543,18 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     text = outside(text, ADDRESS, function (a) { counts.addresses++; originals.push(a); return '<ADDRESS>'; });
     text = outside(text, POSTAL_CA, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
     text = outside(text, ZIP_US, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    // City/province lines are private only in an address context, including quoted lines.
+    var region = '(?:AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)';
+    var city = new RegExp(NB + '(' + CAP + '(?:[ \t]+' + CAP + ')?),[ \t]*' + region + NA, 'gu');
+    var addressLines = text.split('\n');
+    text = addressLines.map(function (line, i) {
+      return line.replace(city, function (match, name, off) {
+        var after = line.slice(off + match.length), before = line.slice(0, off);
+        var previousAddress = i > 0 && /<ADDRESS>/.test(addressLines[i - 1]) && /^[ \t>]*$/.test(before);
+        if (!previousAddress && !/^[ \t]+<POSTAL>/.test(after)) return match;
+        counts.addresses++; originals.push(match); return '<ADDRESS>';
+      });
+    }).join('\n');
     var dates = new Map();
     text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; return dates.get(k); });
     // A day and month without a year ("the March 28 deadline") shares the token of the one full date it matches.
@@ -500,9 +585,24 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       var re = new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu');   // word-like first names: capitalized only (below)
       text = outside(text, re, function (mm, poss, off, whole) {
         if (x[2] && !/^\p{Lu}/u.test(mm)) return mm;
-        counts.names++; return x[1] + (poss || '');
+        counts.names++; markUsed(x[1]); return x[1] + (poss || '');
       });
     });
+
+    // Nonblocking review candidates, outside placeholders and before the AI note.
+    var possibleNames = [], candidateSeen = new Set();
+    function candidate(name) { if (!candidateSeen.has(fold(name))) { candidateSeen.add(fold(name)); possibleNames.push(name); } }
+    var review = text.replace(TOKEN_RE, function (token) { return ' '.repeat(token.length); });
+    var words = /[\p{L}'’-]+/gu, wm;
+    while ((wm = words.exec(review))) {
+      var word = wm[0], key = fold(word), before = review.slice(0, wm.index);
+      var initial = /(?:^|[.!?\n])\s*[>]*\s*$/.test(before);
+      var dateContext = MONTH_WORDS.has(key) && /^\s+\d{4}\b/.test(review.slice(wm.index + word.length));
+      if (!dateContext && (FIRST.has(key) || WORDLIKE_FIRST.has(key) && /^\p{Lu}/u.test(word) && !initial)) candidate(word);
+    }
+    PROSE_NAME.lastIndex = 0;
+    while ((m = PROSE_NAME.exec(review))) if (!/^[\p{Lu}]+$/u.test(m[1]) && !/^[\p{Lu}]+$/u.test(m[2]) && !/^[ \t]*:/.test(review.slice(m.index + m[0].length)) && !COMMON.has(fold(m[1])) && !COMMON.has(fold(m[2]))) candidate(m[0]);
+    if (possibleNames.length) warnings.push('Possible names still in the text: ' + possibleNames.join(', ') + '.');
 
     // 8. tidy and the preservation note
     text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -513,7 +613,14 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     originals.concat(roles.flatMap(function (r) { return r.names; })).forEach(function (o) {
       o = String(o).trim(); if (o.length < 2 || seen.has(fold(o))) return; seen.add(fold(o)); secrets.push(o);
     });
-    var leaks = leakCheck(text, secrets);
+    var leaks = leakCheck(text, secrets).filter(function (secret) {
+      var exact = exclusionPatterns.get(fold(secret));
+      return !exact || exact.test(text.replace(TOKEN_RE, ' '));
+    });
+    decorations.forEach(function (tok, decoration) {
+      var literal = termPattern(decoration).slice(NB.length, -NA.length);
+      if (new RegExp(literal, 'iu').test(text.replace(TOKEN_RE, ' ')) && leaks.indexOf(decoration) < 0) leaks.push(decoration);
+    });
     var bare = text.replace(TOKEN_RE, ' ');
     // Organisations behind the email domains that still appear by name (the user decides; they may not be sensitive).
     var orgs = [];
@@ -525,7 +632,7 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       var m = new RegExp(NB + esc(word) + '[\\p{L}]*(?:[ \\t]+' + CAP + ')?', 'iu').exec(bare);
       if (m && orgs.indexOf(m[0]) < 0) orgs.push(m[0]);
     });
-    if (orgs.length) warnings.push('These organisation names match the email addresses and are still in the text: ' + orgs.join(', ') + '. Add them to My company or Always remove if they identify anyone.');
+    if (orgs.length) warnings.push('These organisation names match the email addresses and are still in the text: ' + orgs.join(', ') + '. Add them to Always remove if they identify anyone.');
     if (/@[\p{L}\p{N}-]+\.[\p{L}]{2,}/u.test(bare)) warnings.push('An "@" address fragment is still in the text.');
     if (/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(bare)) warnings.push('A number that looks like part of a phone number is still in the text.');
 
@@ -533,8 +640,9 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       text: text,
       people: people.map(function (p) { return { token: p.token, names: [p.first, p.last].filter(Boolean).join(' '), emails: Array.from(p.emails), sources: Array.from(p.sources) }; }),
       roles: roles.map(function (r) { return { token: r.token, names: r.names }; }),
+      organisations: Array.from(decorations.entries()).map(function (x) { return { text: x[0], token: x[1] }; }),
       terms: killTokens.map(function (k) { return { token: k[1], text: k[0] }; }),
-      counts: counts, leaks: leaks, warnings: warnings, secrets: secrets
+      usedSaved: Array.from(usedSaved), counts: counts, leaks: leaks, warnings: warnings, possibleNames: possibleNames, secrets: secrets
     };
   }
 
@@ -544,7 +652,109 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     return (secrets || []).filter(function (o) { return new RegExp(termPattern(o), 'iu').test(bare); });
   }
 
-  var api = { scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.2.0' };
+  function nameForms(names) { return Array.isArray(names) ? names : String(names || '').split(',').map(function (n) { return n.trim(); }).filter(Boolean); }
+  function sanitizeLabel(label) { return String(label || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function effectivePeople(opts) {
+    var me = nameForms(opts.me), thread = (opts.thread || []).map(function (r) { return Object.assign({}, r, { names: nameForms(r.names), source: 'thread' }); });
+    var taken = new Set(me.concat(thread.flatMap(function (r) { return r.names; })).map(fold));
+    return [{ names: me, source: 'me', label: 'ME' }].concat(thread, (opts.saved || []).map(function (r, i) {
+      return Object.assign({}, r, { id: r.id || 'saved-' + i, source: 'saved', names: nameForms(r.names).filter(function (n) { return !taken.has(fold(n)); }) });
+    }));
+  }
+  function emptyPreferences() { return { me: '', saved: [], kill: '', excluded: [], nextExcluded: 1 }; }
+  function migratePreferences(saved) {
+    if (!saved || typeof saved.kill !== 'string' || !Array.isArray(saved.excluded)) throw new Error('Invalid preferences');
+    var me = '', people = [];
+    if (Array.isArray(saved.people)) {
+      saved.people.forEach(function (r, i) {
+        if (!r || typeof r.role !== 'string' || typeof r.title !== 'string' || typeof r.names !== 'string') throw new Error('Invalid person');
+        if (r.role === 'Me') me = [me, r.names].filter(Boolean).join(', ');
+        else if (r.names.trim()) people.push({ id: 'migrated-' + i, names: r.names, label: sanitizeLabel(r.title || r.role), lastUsed: '' });
+      });
+    } else {
+      if (typeof saved.me !== 'string' || !Array.isArray(saved.saved)) throw new Error('Invalid preferences');
+      me = saved.me;
+      var ids = new Set();
+      people = saved.saved.map(function (r) {
+        if (!r || typeof r.id !== 'string' || !r.id || ids.has(r.id) || typeof r.names !== 'string' || typeof r.label !== 'string' || typeof r.lastUsed !== 'string' || r.lastUsed && !/^\d{4}-\d{2}-\d{2}$/.test(r.lastUsed)) throw new Error('Invalid saved person');
+        ids.add(r.id); return { id: r.id, names: r.names, label: sanitizeLabel(r.label), lastUsed: r.lastUsed };
+      });
+    }
+    var seen = new Set();
+    var items = saved.excluded.map(function (t, i) { return typeof t === 'string' ? { text: t, n: i + 1 } : { text: t && t.text, n: t && t.n }; });
+    items.forEach(function (t) { if (typeof t.text !== 'string' || !Number.isSafeInteger(t.n) || t.n < 1 || seen.has(t.n)) throw new Error('Invalid exclusion'); seen.add(t.n); });
+    var floor = Math.max.apply(null, [0].concat(items.map(function (t) { return t.n; }))) + 1;
+    return { me: me, saved: people, kill: saved.kill, excluded: items, nextExcluded: Number.isSafeInteger(saved.nextExcluded) ? Math.max(floor, saved.nextExcluded) : floor };
+  }
+  // Pure state helpers are shared by the UI and node acceptance tests. No thread/result persistence.
+  function savePerson(prefs, thread, index) {
+    var person = thread[index]; if (!person || !person.names.trim()) return false;
+    var id = 'saved-1', n = 1; while (prefs.saved.some(function (r) { return r.id === id; })) id = 'saved-' + (++n);
+    prefs.saved.push({ id: id, names: person.names, label: sanitizeLabel(person.label), lastUsed: '' }); thread.splice(index, 1); return true;
+  }
+  function updateLastUsed(prefs, used, date) { prefs.saved.forEach(function (r) { if (used.indexOf(r.id) >= 0) r.lastUsed = date; }); }
+  function searchSaved(people, query) { return people.filter(function (r) { return fold(r.names).includes(fold(query)); }); }
+  function migrationNotice(legacy) { return !!(legacy && legacy.excluded && legacy.excluded.some(function (e) { return typeof e === 'string'; })); }
+  function clearThread(thread) { thread.splice(0); }
+  function forgetPreferences() { return emptyPreferences(); }
+  function demoControls(demo) { return { disabled: demo, title: demo ? 'Leave the demo to manage saved preferences.' : '' }; }
+  var SAMPLE = `From: Quill, Mira T@Paper Lantern@Sampleville <mira@example.com>
+To: Vale, Nolan (Sample Office) <nolan@example.com>
+Cc: Lyra Finch | Fictional Widgets <lyra@example.com>
+Sent: March 27, 2026 09:00
+Subject: Project Lantern and the March 28 deadline
+
+Hi Nolan,
+
+Please tell Andre that the draft is ready.
+We can keep the whole reply chain for review.
+The March 28 deadline remains unchanged.
+Project Lantern is a fictional project.
+The internal note is sample-private.
+Account number: DEMO12345
+Demo SIN: 046 454 286
+Demo SSN: 123-45-6789
+Demo payment test card: 4111 1111 1111 1111
+See https://example.com/sample for the fictional agenda.
+
+Regards,
+Mira Quill
+Coordinator / Coordonnatrice
+Fictional Widgets / Atelier fictif
+613-555-0100 ext. 222
+123 Imaginary Street
+Sampleville, ON K1A 0B1
+
+CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intended recipient, notify the sender and delete this message.
+
+---------- Forwarded message ----------
+> From: Vale, Nolan (Sample Office) <nolan@example.com>
+> To: Quill, Mira T@Paper Lantern@Sampleville <mira@example.com>
+> Sent: 26 mars 2026 14:00
+> Subject: Projet fictif
+>
+> Bonjour Mira,
+>
+> Le rendez-vous du 28 mars convient.
+> Appelez au 613-555-0101 poste 123.
+> Nous gardons toutes les réponses dans ce fil.
+>
+> Cordialement,
+> Nolan Vale
+> Conseiller / Adviser
+>
+>> From: Lyra Finch | Fictional Widgets <lyra@example.com>
+>> To: Nolan Vale <nolan@example.com>
+>> Sent: March 25, 2026 10:00
+>> Subject: First fictional draft
+>>
+>> Hello Nolan,
+>> The fictional draft is attached as plain text.
+>> There are no real people or organisations here.
+>> Cheers,
+>> Lyra Finch`;
+
+  var api = { sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.4.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
@@ -552,60 +762,101 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   $('js').textContent = ''; $('js').hidden = true; $('ver').textContent = EmailScrub.version;
-  var ROLE_LABELS = ['Client', 'Boss', 'Vendor', 'Me', 'Colleague', 'Employee', 'Partner', 'Customer', 'Adviser', 'My company'];
-  var STORE = 'email-scrub.preferences.v1', last = null, acknowledged = false, excluded = [], selection = '';
-  function addRow(role, title, names) {
+  var STORE = 'email-scrub.preferences.v3', OLD_STORE = 'email-scrub.preferences.v2', V1_STORE = 'email-scrub.preferences.v1', NOTICE = 'email-scrub.exclusions-notice.v1';
+  var last = null, acknowledged = false, excluded = [], selection = '', nextExcluded = 1, demo = false, beforeDemo = null, savedPeople = [], noticePending = false;
+  function threadPeople() { return Array.from($('roles').children).map(function (row) { return { names: row.querySelector('.names').value, label: row.querySelector('.labin').value }; }); }
+  function addRow(label, names) {
     var row = document.createElement('div'); row.className = 'role-row';
-    var select = document.createElement('select'); select.className = 'role'; select.setAttribute('aria-label', 'Relative role');
-    ROLE_LABELS.forEach(function (label) { var opt = document.createElement('option'); opt.value = label; opt.textContent = label; select.appendChild(opt); });
-    select.value = ROLE_LABELS.indexOf(role) >= 0 ? role : 'Colleague';
-    var lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Custom title (optional)'; lab.value = title || ''; lab.setAttribute('aria-label', 'Custom title');
     var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'names'; nm.autocomplete = 'off'; nm.value = names || ''; nm.placeholder = 'Name, alternate name'; nm.setAttribute('aria-label', 'Person names');
-    var remove = document.createElement('button'); remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove person');
-    remove.onclick = function () { row.remove(); changed(); };
-    [select, lab, nm, remove].forEach(function (el) { row.appendChild(el); }); $('roles').appendChild(row);
+    var lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Label (optional)'; lab.value = label || ''; lab.setAttribute('aria-label', 'Person label');
+    var keep = document.createElement('button'); keep.textContent = 'Save'; keep.setAttribute('aria-label', 'Save person');
+    keep.onclick = function () {
+      var prefs = preferences(), thread = threadPeople(), index = Array.from($('roles').children).indexOf(row);
+      if (!EmailScrub.savePerson(prefs, thread, index)) { nm.focus(); return; }
+      savedPeople = prefs.saved; row.remove(); renderSaved(); changed();
+    };
+    var remove = document.createElement('button'); remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove person'); remove.onclick = function () { row.remove(); changed(); };
+    [nm, lab, keep, remove].forEach(function (el) { row.appendChild(el); }); $('roles').appendChild(row);
   }
-  function defaults() { $('roles').textContent = ''; ['Client', 'Boss', 'Vendor', 'Me'].forEach(function (r) { addRow(r); }); }
-  function preferences() {
-    return { people: Array.from($('roles').children).map(function (r) { return { role: r.querySelector('.role').value, title: r.querySelector('.labin').value, names: r.querySelector('.names').value }; }), kill: $('kill').value, excluded: excluded };
-  }
+  function preferences() { return { me: $('me').value, saved: savedPeople, kill: $('kill').value, excluded: excluded, nextExcluded: nextExcluded }; }
+  function storageMessage() { $('storage-status').textContent = 'Only Me, Saved people and exclusions are remembered in this browser. They are not encrypted. This-thread people, threads and results are never stored.'; }
   function save() {
-    try { localStorage.setItem(STORE, JSON.stringify(preferences())); $('storage-status').textContent = 'People and exclusions are remembered in this browser. They are not encrypted. Threads and results are never stored.'; }
+    if (demo) return;
+    try { localStorage.setItem(STORE, JSON.stringify(preferences())); storageMessage(); }
     catch (e) { $('storage-status').textContent = 'Browser storage is unavailable. Changes work for this session but will not be remembered.'; }
+  }
+  function renderSaved() {
+    $('saved-people-summary').textContent = 'Saved people (' + savedPeople.length + ')'; $('saved-people').textContent = '';
+    var matches = EmailScrub.searchSaved(savedPeople, $('saved-search').value);
+    if (!matches.length) $('saved-people').textContent = savedPeople.length ? 'No matching people.' : 'No saved people yet.';
+    matches.forEach(function (person) {
+      var row = document.createElement('div'); row.className = 'saved-term';
+      var text = document.createElement('span'); text.textContent = person.names + ' · ' + (person.label ? '<' + person.label + '>' : 'Numbered by appearance') + ' · Last used: ' + (person.lastUsed || 'Never');
+      var edit = document.createElement('button'); edit.textContent = 'Edit';
+      edit.onclick = function () {
+        row.textContent = ''; row.className = 'saved-editor';
+        var names = document.createElement('input'); names.type = 'text'; names.value = person.names; names.setAttribute('aria-label', 'Edit saved names');
+        var label = document.createElement('input'); label.type = 'text'; label.value = person.label; label.setAttribute('aria-label', 'Edit saved label');
+        var done = document.createElement('button'); done.textContent = 'Save changes'; done.onclick = function () {
+          if (!names.value.trim()) { names.focus(); return; }
+          person.names = names.value; person.label = EmailScrub.sanitizeLabel(label.value); renderSaved(); changed();
+        };
+        var cancel = document.createElement('button'); cancel.textContent = 'Cancel'; cancel.onclick = renderSaved;
+        [names, label, done, cancel].forEach(function (el) { row.appendChild(el); }); names.focus();
+      };
+      var remove = document.createElement('button'); remove.textContent = 'Remove'; remove.onclick = function () { savedPeople.splice(savedPeople.indexOf(person), 1); renderSaved(); changed(); };
+      [text, edit, remove].forEach(function (el) { row.appendChild(el); }); $('saved-people').appendChild(row);
+    });
   }
   function renderExcluded() {
     $('saved-terms').textContent = '';
     if (!excluded.length) $('saved-terms').textContent = 'No highlighted exclusions yet.';
     excluded.forEach(function (term, i) {
-      var row = document.createElement('div'); row.className = 'saved-term'; var span = document.createElement('span'); span.textContent = term;
+      var row = document.createElement('div'); row.className = 'saved-term'; var span = document.createElement('span'); span.textContent = '<EXCLUDED-' + term.n + '> ' + term.text;
       var btn = document.createElement('button'); btn.textContent = 'Forget'; btn.onclick = function () { excluded.splice(i, 1); renderExcluded(); changed(); };
       row.appendChild(span); row.appendChild(btn); $('saved-terms').appendChild(row);
     });
   }
-  defaults();
-  try {
-    var saved = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (saved) {
-      if (!Array.isArray(saved.people) || typeof saved.kill !== 'string' || !Array.isArray(saved.excluded) || saved.excluded.some(function (t) { return typeof t !== 'string'; }) || saved.people.some(function (r) { return !r || typeof r.role !== 'string' || typeof r.title !== 'string' || typeof r.names !== 'string'; })) throw new Error('Invalid preferences');
-      $('roles').textContent = ''; saved.people.forEach(function (r) { addRow(r.role, r.title, r.names); }); $('kill').value = saved.kill; excluded = saved.excluded;
-    }
-    $('storage-status').textContent = 'People and exclusions are remembered in this browser. They are not encrypted. Threads and results are never stored.';
-  } catch (e) { $('storage-status').textContent = 'Saved preferences could not be loaded. Use Forget saved people and exclusions to reset them. This session still works.'; }
-  renderExcluded();
-  function roles() {
-    return Array.from($('roles').children).map(function (r) { return { label: r.querySelector('.labin').value.trim() || r.querySelector('.role').value, names: r.querySelector('.names').value.split(',').map(function (n) { return n.trim(); }).filter(Boolean) }; });
+  function applyPreferences(prefs) {
+    $('me').value = prefs.me; savedPeople = prefs.saved; $('kill').value = prefs.kill;
+    excluded = prefs.excluded.map(function (t) { return { text: t.text, n: t.n }; }); nextExcluded = prefs.nextExcluded; renderSaved();
   }
+  function demoControls() { var controls = EmailScrub.demoControls(demo); $('forget').disabled = controls.disabled; $('forget').title = controls.title; $('migration-notice').hidden = demo || !noticePending; }
+  function leaveDemo() {
+    if (!demo) return;
+    demo = false; applyPreferences(beforeDemo.prefs); $('roles').textContent = ''; beforeDemo.thread.forEach(function (r) { addRow(r.label, r.names); });
+    beforeDemo = null; renderExcluded(); $('results-title').textContent = '4. Check and copy'; demoControls();
+  }
+  try {
+    var prefs = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (!prefs) {
+      var legacy = JSON.parse(localStorage.getItem(OLD_STORE) || localStorage.getItem(V1_STORE) || 'null');
+      if (legacy) {
+        prefs = EmailScrub.migratePreferences(legacy);
+        if (EmailScrub.migrationNotice(legacy) && localStorage.getItem(NOTICE) !== 'dismissed') localStorage.setItem(NOTICE, 'pending');
+        localStorage.setItem(STORE, JSON.stringify(prefs)); localStorage.removeItem(OLD_STORE); localStorage.removeItem(V1_STORE);
+      }
+    }
+    if (prefs) applyPreferences(EmailScrub.migratePreferences(prefs));
+    noticePending = localStorage.getItem(NOTICE) === 'pending'; storageMessage();
+  } catch (e) { $('storage-status').textContent = 'Saved preferences could not be loaded. Use Forget saved people and exclusions to reset them. This session still works.'; }
+  renderSaved(); renderExcluded(); demoControls();
+  $('saved-search').addEventListener('input', renderSaved);
+  $('check-exclusions').onclick = function () { $('exclusions-panel').open = true; };
+  $('dismiss-notice').onclick = function () { noticePending = false; $('migration-notice').hidden = true; try { localStorage.setItem(NOTICE, 'dismissed'); } catch (e) { $('storage-status').textContent = 'Browser storage is unavailable. This notice may return after reload.'; } };
   function invalidate() { last = null; selection = ''; $('exclude').disabled = true; $('res').hidden = true; $('copied').textContent = ''; }
   function changed() { save(); invalidate(); }
-  $('roles').addEventListener('input', changed); $('roles').addEventListener('change', changed); $('kill').addEventListener('input', changed);
-  $('add-person').onclick = function () { addRow('Colleague'); changed(); $('roles').lastChild.querySelector('.names').focus(); };
+  $('roles').addEventListener('input', invalidate); $('me').addEventListener('input', changed); $('kill').addEventListener('input', changed);
+  $('add-person').onclick = function () { addRow(); invalidate(); $('roles').lastChild.querySelector('.names').focus(); };
   function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function paint(text) { $('out').innerHTML = esc(text).replace(/&lt;[A-Z][A-Z0-9-]*&gt;|\[Confidentiality notice removed\]/g, function (t) { return '<span class="t">' + t + '</span>'; }); }
 
   function run() {
     var text = $('input').value;
     if (!text.trim()) { $('input').focus(); return; }
-    last = EmailScrub.scrub(text, { roles: roles(), kill: $('kill').value.split('\n'), excluded: excluded, note: $('note').checked });
+    last = EmailScrub.scrub(text, { me: $('me').value, thread: threadPeople(), saved: savedPeople, kill: $('kill').value.split('\n'), excluded: excluded, note: $('note').checked });
+    var today = new Date(), date = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    EmailScrub.updateLastUsed({ saved: savedPeople }, last.usedSaved, date); renderSaved(); save();
     acknowledged = false; selection = ''; $('exclude').disabled = true; $('selection-status').textContent = '';
     paint(last.text);
     var c = last.counts, chips = [
@@ -615,11 +866,17 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     chips.forEach(function (x) { if (x[1]) { var s = document.createElement('span'); s.className = 'chip'; s.textContent = x[1] + ' ' + x[0]; $('counts').appendChild(s); } });
     $('people').textContent = '';
     var shown = last.people.concat(last.roles.filter(function (r) { return !last.people.some(function (p) { return p.token === r.token; }); }).map(function (r) { return { token: r.token, names: r.names.join(', '), sources: ['you'] }; }));
-    shown.concat(last.terms.map(function (t) { return { token: t.token, names: t.text, sources: ['you'] }; })).forEach(function (p) {
+    shown.concat(last.organisations.map(function (o) { return { token: o.token, names: o.text, sources: ['header decoration'] }; })).concat(last.terms.map(function (t) { return { token: t.token, names: t.text, sources: ['you'] }; })).forEach(function (p) {
       var li = document.createElement('li'), code = document.createElement('code'); code.textContent = p.token;
       li.appendChild(code); li.appendChild(document.createTextNode(' = ' + p.names + ' (' + p.sources.join(', ') + ')')); $('people').appendChild(li);
     });
-    $('people-sum').textContent = 'What was replaced (' + shown.length + (last.terms.length ? ' + ' + last.terms.length + ' terms' : '') + '): stays on this page';
+    $('people-sum').textContent = 'What was replaced (' + (shown.length + last.organisations.length) + (last.terms.length ? ' + ' + last.terms.length + ' terms' : '') + '): stays on this page';
+    $('possible-names').textContent = '';
+    (last.possibleNames || []).forEach(function (name) {
+      var row = document.createElement('p'); row.appendChild(document.createTextNode('Possible name: ' + name + ' '));
+      var b = document.createElement('button'); b.textContent = 'Remove'; b.setAttribute('aria-label', 'Remove possible name ' + name); b.onclick = function () { addExclusion(name); }; row.appendChild(b); $('possible-names').appendChild(row);
+    });
+    $('results-title').textContent = '4. Check and copy' + (demo ? ' (demo)' : '');
     check();
     $('res').hidden = false; $('copied').textContent = '';
     $('res').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -638,8 +895,17 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       box.appendChild(p);
     }
   }
+  $('help-close').onclick = function () { $('help-dialog').close(); };
+  $('help-open').onclick = function () { $('help-dialog').showModal(); };
+  $('demo').onclick = function () {
+    if (!demo) beforeDemo = JSON.parse(JSON.stringify({ prefs: preferences(), thread: threadPeople() }));
+    demo = true; applyPreferences(EmailScrub.emptyPreferences()); $('roles').textContent = ''; $('me').value = 'Mira Quill, Mira';
+    addRow('CLIENT', 'Nolan Vale, Nolan'); addRow('', 'Lyra Finch, Lyra');
+    $('kill').value = 'Project Lantern'; excluded = [{ text: 'sample-private', n: 1 }]; nextExcluded = 2; renderExcluded(); demoControls();
+    $('input').value = EmailScrub.sample; run();
+  };
   $('go').onclick = function () { save(); run(); };
-  $('input').addEventListener('input', invalidate); $('note').addEventListener('change', invalidate);
+  $('input').addEventListener('input', function () { leaveDemo(); invalidate(); }); $('note').addEventListener('change', invalidate);
   document.addEventListener('selectionchange', function () {
     var sel = window.getSelection(); selection = '';
     if (last && sel && sel.rangeCount && $('out').contains(sel.anchorNode) && $('out').contains(sel.focusNode)) selection = sel.toString().trim();
@@ -652,23 +918,27 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
     $('exclude').disabled = !valid; $('selection-status').textContent = valid ? 'Selection ready to remove.' : (selection ? 'Select private text without placeholders or the AI note.' : '');
   });
   $('exclude').addEventListener('mousedown', function (e) { e.preventDefault(); });
+  function addExclusion(text) {
+    if (!excluded.some(function (t) { return t.text === text; })) excluded.push({ text: text, n: nextExcluded++ });
+    renderExcluded(); save(); run();
+  }
   $('exclude').onclick = function () {
     if (!selection || $('exclude').disabled || !last) return;
-    if (!excluded.some(function (t) { return EmailScrub.fold(t) === EmailScrub.fold(selection); })) excluded.push(selection);
-    renderExcluded(); save(); run(); window.getSelection().removeAllRanges();
+    addExclusion(selection); window.getSelection().removeAllRanges();
   };
   $('input').addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
   $('file').onchange = function () {
     var f = $('file').files[0]; if (!f) return;
-    f.text().then(function (t) { $('input').value = t; $('file').value = ''; invalidate(); });
+    f.text().then(function (t) { $('input').value = t; $('file').value = ''; leaveDemo(); invalidate(); });
   };
   $('clear').onclick = function () {
-    $('input').value = ''; $('file').value = ''; invalidate(); $('out').textContent = ''; $('people').textContent = ''; $('input').focus();
+    $('input').value = ''; $('file').value = ''; leaveDemo(); $('roles').textContent = ''; invalidate(); $('out').textContent = ''; $('people').textContent = ''; $('input').focus();
   };
   $('forget').onclick = function () {
-    try { localStorage.removeItem(STORE); $('storage-status').textContent = 'Saved people and exclusions erased.'; }
+    if (demo) return;
+    try { localStorage.removeItem(STORE); localStorage.removeItem(OLD_STORE); localStorage.removeItem(V1_STORE); localStorage.removeItem(NOTICE); $('storage-status').textContent = 'Saved people and exclusions erased.'; }
     catch (e) { $('storage-status').textContent = 'Browser blocked erasing saved preferences. Clear this file’s site data in browser settings.'; }
-    excluded = []; $('kill').value = ''; defaults(); renderExcluded(); invalidate();
+    applyPreferences(EmailScrub.forgetPreferences()); noticePending = false; demoControls(); renderExcluded(); invalidate();
   };
   $('copy').onclick = function () {
     if (!last) return;
