@@ -95,10 +95,10 @@
       }
     }
     collect('file', /(?<![\p{L}\p{N}_])[\p{L}\p{N}_.'’-]+\.(?:pdf|docx?|xlsx?|pptx|msg|eml|txt|jpg|png|zip)\b/giu);
-    collect('age', /\b(?:\d{1,3}-year-old|aged[ \t]+\d{1,3}|age[ \t]+\d{1,3}|âgé(?:e)?[ \t]+de[ \t]+\d{1,3}[ \t]+ans|\d{1,3}[ \t]+ans)\b/giu);
+    collect('age', /(?<![\p{L}\p{N}])(?:\d{1,3}-year-old|aged[ \t]+\d{1,3}|age[ \t]+\d{1,3}|âgé(?:e)?[ \t]+de[ \t]+\d{1,3}[ \t]+ans|\d{1,3}[ \t]+ans)(?![\p{L}\p{N}])/giu);
     collect('url', /\b(?:linkedin\.com\/in|facebook\.com|instagram\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/gi);
     collect('zip', ZIP_US);
-    collect('id', /(?<![\p{L}\p{N}_])(?=[A-Z0-9]*\d)[A-Z0-9]+(?:[ -]+[A-Z0-9]*\d[A-Z0-9]*)*(?![\p{L}\p{N}_])/giu, function (m, source) {
+    collect('id', /(?<![\p{L}\p{N}_])(?:(?=[A-Z0-9]*\d)[A-Z0-9]+(?:[ -]+[A-Z0-9]*\d[A-Z0-9]*)*|[A-Z]{2,}[ -]+\d+(?:[ -]+\d+)*)(?![\p{L}\p{N}_])/giu, function (m, source) {
       var compact = m[0].replace(/[ -]/g, ''), before = source.slice(0, m.index), after = source.slice(m.index + m[0].length);
       if (!/^\d{5,}$/.test(compact) && !(/\d/.test(compact) && /[a-z]/i.test(compact) && compact.length >= 6)) return false;
       if (/[$€£¥][ \t]*[\d,.]*$/.test(before) || /\d[:,.]$/.test(before) || /^[:,.]\d/.test(after)) return false;
@@ -572,7 +572,7 @@ Account number: DEMO12345
 Fictional test IBAN: GB82 WEST 1234 5698 7654 32
 Fictional test bank: 12345-001-1234567
 Documentation IP: 192.0.2.42
-Documentation IPv6: 2001:db8::42
+IPv6: 2001:db8::42
 Fictional MAC: 02:00:00:00:00:42
 Example VIN: 1M8GDM9AXKP042788
 Fictional coordinates: 45.0000, -75.0000

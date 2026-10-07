@@ -11,8 +11,8 @@ test('I2 six kinds; final offsets; no overlap; currency/date/time/phone/token gu
  for(const f of r.flags){assert.equal(r.text.slice(f.start,f.end),f.text);assert(f.id);assert(f.start>=r.text.indexOf('\n\n'));}
  for(let i=1;i<r.flags.length;i++)assert(r.flags[i].start>=r.flags[i-1].end);
  for(const value of ['$12,500','€12500','2026-10-07','613 555 0100','12:50000','<EXCLUDED-12345>','<PERSON-12345>'])assert(!run(value).flags.some(f=>f.kind==='id'),value);
- assert.equal(run('10001').flags[0].kind,'id');assert.equal(run('NY 10001-1234').flags[0].kind,'zip');
- for(const age of ['52-year-old','aged 52','age 52','âgé de 52 ans','52 ans'])assert.equal(run(age).flags[0].kind,'age');
+ assert.equal(run('ABC 123').flags[0].text,'ABC 123');assert.equal(run('abcdef 123').flags[0].kind,'id');assert.equal(run('10001').flags[0].kind,'id');assert.equal(run('NY 10001-1234').flags[0].kind,'zip');
+ for(const age of ['52-year-old','aged 52','age 52','âgé de 52 ans','52 ans']){assert.equal(run(age).flags[0].kind,'age');assert.equal(run(age).flags[0].text,age);}
  assert(!run('https://linkedin.com/in/test').flags.some(f=>f.kind==='url'));
 });
 test('V1/V2 kept text is unchanged, exclusions replace all occurrences, leak/yellow separation',()=>{
