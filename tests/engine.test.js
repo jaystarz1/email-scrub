@@ -130,3 +130,11 @@ r = scrub('SIN 046 454 286 and ref 123 456 789', { note: false });
 assert(r.text.includes('<SIN>') && r.text.includes('123 456 789'), r.text); checks++;
 
 console.log(`PASS engine: ${checks} checks (Outlook EN/FR, Gmail, roles, kill list, dates, guards, idempotence, note, SIN)`);
+
+// Manual selections remove exact fragments and multiline passages and preserve placeholders.
+const manual = scrub('codeprivate codeprivate. Private passage\ncontinues here. <EMAIL>', { excluded: ['private', 'Private passage\ncontinues here.'], note: false });
+assert(!manual.text.includes('private')); assert(!manual.text.includes('continues here'));
+assert(manual.text.includes('<EMAIL>')); assert.equal(manual.counts.terms, 3);
+const repeatedRoles = scrub('Zorvex Quill and Velqor Drenn', { roles: [{ label: 'Boss', names: ['Zorvex Quill'] }, { label: 'Boss', names: ['Velqor Drenn'] }], note: false });
+assert(repeatedRoles.text.includes('<BOSS>')); assert(repeatedRoles.text.includes('<BOSS-2>'));
+console.log('PASS manual exclusions and distinct repeated-role placeholders');

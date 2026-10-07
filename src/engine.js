@@ -181,8 +181,12 @@
     }
 
     // 2. roles: the user's names collapse to the role token; a detected person who matches joins the role
+    var usedLabels = new Set();
     var roles = (opts.roles || []).filter(function (r) { return r && r.label && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
       var label = String(r.label).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ROLE';
+      var base = label, suffix = 1;
+      while (usedLabels.has(label)) label = base + '-' + (++suffix);
+      usedLabels.add(label);
       return { token: '<' + label + '>', names: r.names.map(function (n) { return n.trim(); }).filter(Boolean) };
     });
     var roleParts = [];   // [foldedName, token]
@@ -219,6 +223,12 @@
 
     // 5. the kill list, then role names the user typed (longest first)
     var killTokens = [];
+    // Explicit selections also remove fragments and multiline passages, outside existing tokens.
+    (opts.excluded || []).map(function (t) { return String(t).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (term, i) {
+      var tok = '<EXCLUDED-' + (i + 1) + '>'; killTokens.push([term, tok]); originals.push(term);
+      var literal = termPattern(term).slice(NB.length, -NA.length);
+      text = outside(text, new RegExp(literal, 'giu'), function () { counts.terms++; return tok; });
+    });
     (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (k, i) {
       var tok = '<TERM-' + (i + 1) + '>'; killTokens.push([k, tok]); originals.push(k);
       text = outside(text, new RegExp(termPattern(k), 'giu'), function () { counts.terms++; return tok; });
@@ -315,6 +325,6 @@
     return (secrets || []).filter(function (o) { return new RegExp(termPattern(o), 'iu').test(bare); });
   }
 
-  var api = { scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.1.0' };
+  var api = { scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.2.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

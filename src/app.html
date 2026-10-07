@@ -14,9 +14,11 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}
 .sub{color:var(--muted);margin:0 0 14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 14px}
 label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
-input[type=text],textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--card);color:var(--ink)}
+input[type=text],textarea,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--card);color:var(--ink)}
 textarea{font:13px/1.5 Consolas,ui-monospace,monospace}
-.roles{display:grid;grid-template-columns:minmax(110px,180px) 1fr;gap:8px 10px;align-items:center}
+.role-row{display:grid;grid-template-columns:140px 180px 1fr auto;gap:8px;margin-bottom:8px;align-items:center}
+.saved-term{display:flex;gap:8px;align-items:center;margin:6px 0;overflow-wrap:anywhere}.saved-term span{flex:1;white-space:pre-wrap}
+#selection-status{color:var(--muted)}
 .roles .lab{font-weight:600}
 .roles input.labin{font-weight:600}
 button{font:inherit;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;cursor:pointer}
@@ -34,10 +36,10 @@ ul.people{margin:4px 0 0;padding-left:18px}ul.people li{margin:2px 0}
 ul.people code{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 3px}
 details summary{cursor:pointer;color:var(--accent)}
 footer{color:var(--muted);font-size:13px;margin-top:18px}
-@media (max-width:560px){.roles{grid-template-columns:1fr}.roles .lab,.roles input.labin{margin-top:6px}}
+@media (max-width:560px){.role-row{grid-template-columns:1fr}.roles .lab,.roles input.labin{margin-top:6px}}
 </style></head><body><main>
 <h1>Email Thread Scrubber</h1>
-<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access and saves nothing.</p>
+<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access. People and exclusions are saved only in this browser; pasted threads and results are never saved.</p>
 <p id="js" class="status bad">JavaScript is off, so this page cannot run.</p>
 
 <section class="card">
@@ -51,15 +53,20 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
   <h2>2. Who's who (optional)</h2>
   <p class="sub" style="margin-bottom:10px">Names you enter become the role, everywhere: <code>&lt;CLIENT&gt;</code> reads better than <code>&lt;PERSON-3&gt;</code>. Separate forms with commas, e.g. <i>Robert Smith, Bob</i>. Everyone else is found and numbered automatically.</p>
   <div class="roles" id="roles"></div>
+  <button id="add-person">Add person</button>
+  <p class="sub">Choose a relative role or type a custom title for any person. People sharing a role get separate numbered placeholders.</p>
 </section>
 
 <section class="card">
   <h2>3. Always remove (optional)</h2>
   <label for="kill">One per line: project names, account names, anything else that identifies the people or business</label>
   <textarea id="kill" rows="3"></textarea>
+  <details><summary>Remembered highlighted exclusions</summary><div id="saved-terms"></div></details>
+  <p id="storage-status" class="sub" role="status"></p>
   <div class="bar" style="margin-top:12px">
     <button id="go" class="primary big">Scrub</button>
-    <button id="clear">Clear everything</button>
+    <button id="clear">Clear current thread</button>
+    <button id="forget">Forget saved people and exclusions</button>
     <label style="display:inline;margin:0;color:var(--ink)"><input type="checkbox" id="note" checked> Add a note asking the AI to keep the placeholders</label>
   </div>
 </section>
@@ -69,7 +76,9 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
   <div class="chips" id="counts"></div>
   <div id="leak"></div>
   <details id="people-box"><summary id="people-sum">People found</summary><ul class="people" id="people"></ul></details>
-  <pre id="out"></pre>
+  <p class="sub">Highlight any remaining private text below, then remove it. All matching occurrences are replaced, and the exclusion is remembered for future threads. Select original text only, without placeholders.</p>
+  <div class="bar"><button id="exclude" disabled>Remove highlighted text</button><span id="selection-status" role="status"></span></div>
+  <pre id="out" tabindex="0" aria-label="Scrubbed text: select text to exclude it"></pre>
   <div class="bar"><button id="copy" class="primary">Copy</button><span id="copied" class="status ok" role="status"></span></div>
   <p class="sub" style="margin:10px 0 0">The AI's reply will use the same placeholders. Swap the real names back in as you paste it into your email.</p>
 </section>
@@ -83,34 +92,61 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   $('js').textContent = ''; $('js').hidden = true; $('ver').textContent = EmailScrub.version;
-  var ROLE_LABELS = ['Client', 'Boss', 'Vendor', 'My company'], CUSTOM = 3, last = null, acknowledged = false;
-  function addRow(label, fixed) {
-    var lab;
-    if (fixed) { lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = label; lab.dataset.label = label; }
-    else { lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Your label'; lab.setAttribute('aria-label', 'Role label'); }
-    var names = document.createElement('input'); names.type = 'text'; names.className = 'names'; names.autocomplete = 'off';
-    names.setAttribute('aria-label', (label || 'Custom role') + ' names');
-    $('roles').appendChild(lab); $('roles').appendChild(names);
+  var ROLE_LABELS = ['Client', 'Boss', 'Vendor', 'Me', 'Colleague', 'Employee', 'Partner', 'Customer', 'Adviser', 'My company'];
+  var STORE = 'email-scrub.preferences.v1', last = null, acknowledged = false, excluded = [], selection = '';
+  function addRow(role, title, names) {
+    var row = document.createElement('div'); row.className = 'role-row';
+    var select = document.createElement('select'); select.className = 'role'; select.setAttribute('aria-label', 'Relative role');
+    ROLE_LABELS.forEach(function (label) { var opt = document.createElement('option'); opt.value = label; opt.textContent = label; select.appendChild(opt); });
+    select.value = ROLE_LABELS.indexOf(role) >= 0 ? role : 'Colleague';
+    var lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Custom title (optional)'; lab.value = title || ''; lab.setAttribute('aria-label', 'Custom title');
+    var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'names'; nm.autocomplete = 'off'; nm.value = names || ''; nm.placeholder = 'Name, alternate name'; nm.setAttribute('aria-label', 'Person names');
+    var remove = document.createElement('button'); remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove person');
+    remove.onclick = function () { row.remove(); changed(); };
+    [select, lab, nm, remove].forEach(function (el) { row.appendChild(el); }); $('roles').appendChild(row);
   }
-  ROLE_LABELS.forEach(function (l) { addRow(l, true); });
-  for (var i = 0; i < CUSTOM; i++) addRow('', false);
-
-  function roles() {
-    var out = [], kids = $('roles').children;
-    for (var i = 0; i < kids.length; i += 2) {
-      var label = kids[i].dataset.label || kids[i].value.trim(), names = kids[i + 1].value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-      if (names.length) out.push({ label: label || 'Role ' + (i / 2 + 1), names: names });
+  function defaults() { $('roles').textContent = ''; ['Client', 'Boss', 'Vendor', 'Me'].forEach(function (r) { addRow(r); }); }
+  function preferences() {
+    return { people: Array.from($('roles').children).map(function (r) { return { role: r.querySelector('.role').value, title: r.querySelector('.labin').value, names: r.querySelector('.names').value }; }), kill: $('kill').value, excluded: excluded };
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(preferences())); $('storage-status').textContent = 'People and exclusions are remembered in this browser. They are not encrypted. Threads and results are never stored.'; }
+    catch (e) { $('storage-status').textContent = 'Browser storage is unavailable. Changes work for this session but will not be remembered.'; }
+  }
+  function renderExcluded() {
+    $('saved-terms').textContent = '';
+    if (!excluded.length) $('saved-terms').textContent = 'No highlighted exclusions yet.';
+    excluded.forEach(function (term, i) {
+      var row = document.createElement('div'); row.className = 'saved-term'; var span = document.createElement('span'); span.textContent = term;
+      var btn = document.createElement('button'); btn.textContent = 'Forget'; btn.onclick = function () { excluded.splice(i, 1); renderExcluded(); changed(); };
+      row.appendChild(span); row.appendChild(btn); $('saved-terms').appendChild(row);
+    });
+  }
+  defaults();
+  try {
+    var saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (saved) {
+      if (!Array.isArray(saved.people) || typeof saved.kill !== 'string' || !Array.isArray(saved.excluded) || saved.excluded.some(function (t) { return typeof t !== 'string'; }) || saved.people.some(function (r) { return !r || typeof r.role !== 'string' || typeof r.title !== 'string' || typeof r.names !== 'string'; })) throw new Error('Invalid preferences');
+      $('roles').textContent = ''; saved.people.forEach(function (r) { addRow(r.role, r.title, r.names); }); $('kill').value = saved.kill; excluded = saved.excluded;
     }
-    return out;
+    $('storage-status').textContent = 'People and exclusions are remembered in this browser. They are not encrypted. Threads and results are never stored.';
+  } catch (e) { $('storage-status').textContent = 'Saved preferences could not be loaded. Use Forget saved people and exclusions to reset them. This session still works.'; }
+  renderExcluded();
+  function roles() {
+    return Array.from($('roles').children).map(function (r) { return { label: r.querySelector('.labin').value.trim() || r.querySelector('.role').value, names: r.querySelector('.names').value.split(',').map(function (n) { return n.trim(); }).filter(Boolean) }; });
   }
+  function invalidate() { last = null; selection = ''; $('exclude').disabled = true; $('res').hidden = true; $('copied').textContent = ''; }
+  function changed() { save(); invalidate(); }
+  $('roles').addEventListener('input', changed); $('roles').addEventListener('change', changed); $('kill').addEventListener('input', changed);
+  $('add-person').onclick = function () { addRow('Colleague'); changed(); $('roles').lastChild.querySelector('.names').focus(); };
   function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function paint(text) { $('out').innerHTML = esc(text).replace(/&lt;[A-Z][A-Z0-9-]*&gt;|\[Confidentiality notice removed\]/g, function (t) { return '<span class="t">' + t + '</span>'; }); }
 
   function run() {
     var text = $('input').value;
     if (!text.trim()) { $('input').focus(); return; }
-    last = EmailScrub.scrub(text, { roles: roles(), kill: $('kill').value.split('\n'), note: $('note').checked });
-    acknowledged = false;
+    last = EmailScrub.scrub(text, { roles: roles(), kill: $('kill').value.split('\n'), excluded: excluded, note: $('note').checked });
+    acknowledged = false; selection = ''; $('exclude').disabled = true; $('selection-status').textContent = '';
     paint(last.text);
     var c = last.counts, chips = [
       ['people', last.people.length], ['names replaced', c.names + c.roles], ['emails', c.emails], ['phones', c.phones], ['dates', c.dates],
@@ -142,16 +178,37 @@ footer{color:var(--muted);font-size:13px;margin-top:18px}
       box.appendChild(p);
     }
   }
-  $('go').onclick = run;
+  $('go').onclick = function () { save(); run(); };
+  $('input').addEventListener('input', invalidate); $('note').addEventListener('change', invalidate);
+  document.addEventListener('selectionchange', function () {
+    var sel = window.getSelection(); selection = '';
+    if (last && sel && sel.rangeCount && $('out').contains(sel.anchorNode) && $('out').contains(sel.focusNode)) selection = sel.toString().trim();
+    var inNote = false;
+    if (selection && $('note').checked) {
+      var prefix = document.createRange(); prefix.selectNodeContents($('out')); prefix.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+      inNote = prefix.toString().length < last.text.indexOf('\n\n') + 2;
+    }
+    var valid = selection && !inNote && !/[<>]|\[Confidentiality notice removed\]/.test(selection);
+    $('exclude').disabled = !valid; $('selection-status').textContent = valid ? 'Selection ready to remove.' : (selection ? 'Select private text without placeholders or the AI note.' : '');
+  });
+  $('exclude').addEventListener('mousedown', function (e) { e.preventDefault(); });
+  $('exclude').onclick = function () {
+    if (!selection || $('exclude').disabled || !last) return;
+    if (!excluded.some(function (t) { return EmailScrub.fold(t) === EmailScrub.fold(selection); })) excluded.push(selection);
+    renderExcluded(); save(); run(); window.getSelection().removeAllRanges();
+  };
   $('input').addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
   $('file').onchange = function () {
     var f = $('file').files[0]; if (!f) return;
-    f.text().then(function (t) { $('input').value = t; $('file').value = ''; });
+    f.text().then(function (t) { $('input').value = t; $('file').value = ''; invalidate(); });
   };
   $('clear').onclick = function () {
-    $('input').value = ''; $('kill').value = '';
-    Array.prototype.forEach.call($('roles').querySelectorAll('input'), function (i) { i.value = ''; });
-    last = null; $('out').textContent = ''; $('people').textContent = ''; $('res').hidden = true; $('input').focus();
+    $('input').value = ''; $('file').value = ''; invalidate(); $('out').textContent = ''; $('people').textContent = ''; $('input').focus();
+  };
+  $('forget').onclick = function () {
+    try { localStorage.removeItem(STORE); $('storage-status').textContent = 'Saved people and exclusions erased.'; }
+    catch (e) { $('storage-status').textContent = 'Browser blocked erasing saved preferences. Clear this file’s site data in browser settings.'; }
+    excluded = []; $('kill').value = ''; defaults(); renderExcluded(); invalidate();
   };
   $('copy').onclick = function () {
     if (!last) return;

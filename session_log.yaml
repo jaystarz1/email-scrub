@@ -1,0 +1,12 @@
+meta:
+  last_updated: '2026-10-07'
+  purpose: Offline Email Thread Scrubber continuity
+current_state:
+  active_task: Email Thread Scrubber 0.2.0 usability update
+  status: complete
+  next_action: Jay testing; commercial funnel remains recommendation only.
+  summary: Added selection-based removal in Check and copy, remembered local exclusions and people, expandable rows with ten role choices and custom titles, and separate clear/forget controls. Chrome and engine checks pass with zero network requests; threads and output are never persisted. Commercial recommendation saved in second-brain, with no collection, upgrade prompt or billing implementation.
+pending_tasks: []
+session_history:
+  - date: '2026-10-07'
+    summary: Built and verified 0.2.0 with highlight removal, local preferences and expandable people; researched paid support without implementing it.
