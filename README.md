@@ -113,7 +113,7 @@ See [v0.5 checklist](tests/V05-CHECKLIST.md) for the manual items and verificati
 
 ## Product page preview
 
-The v0.5 testing build’s footer points to an adjacent `email-scrub-landing.html` preview with draft terms/privacy. Save the two delivered HTML files together to inspect it. The scrubber still runs alone; it does not load the preview or contact any website automatically. No landing page has been deployed and the draft legal wording is not a published agreement. Integration with the live website and final publisher details require a separate inspection decision.
+Product page, terms and privacy statement: https://thechatbotgenius.com/email-scrubber/. The footer links open it in a new tab when clicked; the scrubber itself still makes no network requests and runs alone.
 
 ## Licence
 
