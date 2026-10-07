@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Thread Scrubber</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2230;--muted:#5b6474;--line:#d7dce4;--accent:#1f5fbf;--accent-ink:#fff;--ok:#11702a;--warn:#8a5300;--bad:#b00020;--tok:#e6eefc;--tokink:#174ea6;--soft:#eef1f5;--alarm:#fdecee}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1c2027;--ink:#e6e9ee;--muted:#9aa3b2;--line:#323844;--accent:#6ea0f0;--accent-ink:#0d1117;--ok:#5cc983;--warn:#e0a54a;--bad:#ff7b8a;--tok:#22324d;--tokink:#a9c6ff;--soft:#262b34;--alarm:#3a1f25}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1c2027;--ink:#e6e9ee;--muted:#9aa3b2;--line:#323844;--accent:#6ea0f0;--accent-ink:#0d1117;--ok:#5cc983;--warn:#e0a54a;--bad:#ff7b8a;--tok:#22324d;--tokink:#a9c6ff;--soft:#262b34;--alarm:#3a1f25}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+main{max-width:980px;margin:0 auto;padding:22px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
+input[type=text],textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--card);color:var(--ink)}
+textarea{font:13px/1.5 Consolas,ui-monospace,monospace}
+.roles{display:grid;grid-template-columns:minmax(110px,180px) 1fr;gap:8px 10px;align-items:center}
+.roles .lab{font-weight:600}
+.roles input.labin{font-weight:600}
+button{font:inherit;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.big{font-size:17px;padding:10px 26px}
+button:disabled{opacity:.45;cursor:default}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{background:var(--soft);border-radius:12px;padding:2px 10px;font-size:13px}
+.status{font-weight:600}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.alarm{border:2px solid var(--bad);background:var(--alarm);border-radius:6px;padding:10px 12px;margin:0 0 10px}
+pre#out{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:12px;max-height:520px;overflow:auto;font:13px/1.5 Consolas,ui-monospace,monospace;margin:10px 0}
+pre#out .t{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 2px}
+ul.people{margin:4px 0 0;padding-left:18px}ul.people li{margin:2px 0}
+ul.people code{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 3px}
+details summary{cursor:pointer;color:var(--accent)}
+footer{color:var(--muted);font-size:13px;margin-top:18px}
+@media (max-width:560px){.roles{grid-template-columns:1fr}.roles .lab,.roles input.labin{margin-top:6px}}
+</style></head><body><main>
+<h1>Email Thread Scrubber</h1>
+<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access and saves nothing.</p>
+<p id="js" class="status bad">JavaScript is off, so this page cannot run.</p>
+
+<section class="card">
+  <h2>1. Paste the thread</h2>
+  <label for="input">Email thread or any text</label>
+  <textarea id="input" rows="10" placeholder="Paste here" autofocus></textarea>
+  <div class="bar" style="margin-top:8px"><label for="file" style="margin:0">or open a .txt file</label><input type="file" id="file" accept=".txt,text/plain"></div>
+</section>
+
+<section class="card">
+  <h2>2. Who's who (optional)</h2>
+  <p class="sub" style="margin-bottom:10px">Names you enter become the role, everywhere: <code>&lt;CLIENT&gt;</code> reads better than <code>&lt;PERSON-3&gt;</code>. Separate forms with commas, e.g. <i>Robert Smith, Bob</i>. Everyone else is found and numbered automatically.</p>
+  <div class="roles" id="roles"></div>
+</section>
+
+<section class="card">
+  <h2>3. Always remove (optional)</h2>
+  <label for="kill">One per line: project names, account names, anything else that identifies the people or business</label>
+  <textarea id="kill" rows="3"></textarea>
+  <div class="bar" style="margin-top:12px">
+    <button id="go" class="primary big">Scrub</button>
+    <button id="clear">Clear everything</button>
+    <label style="display:inline;margin:0;color:var(--ink)"><input type="checkbox" id="note" checked> Add a note asking the AI to keep the placeholders</label>
+  </div>
+</section>
+
+<section class="card" id="res" hidden>
+  <h2>4. Check and copy</h2>
+  <div class="chips" id="counts"></div>
+  <div id="leak"></div>
+  <details id="people-box"><summary id="people-sum">People found</summary><ul class="people" id="people"></ul></details>
+  <pre id="out"></pre>
+  <div class="bar"><button id="copy" class="primary">Copy</button><span id="copied" class="status ok" role="status"></span></div>
+  <p class="sub" style="margin:10px 0 0">The AI's reply will use the same placeholders. Swap the real names back in as you paste it into your email.</p>
+</section>
+
+<footer>Version <span id="ver"></span> · Runs entirely in your browser · Blocked from the network by its own security policy · Apache-2.0 licence</footer>
+</main>
+
+<script>/*LISTS*/</script>
+<script>/*ENGINE*/</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  $('js').textContent = ''; $('js').hidden = true; $('ver').textContent = EmailScrub.version;
+  var ROLE_LABELS = ['Client', 'Boss', 'Vendor', 'My company'], CUSTOM = 3, last = null, acknowledged = false;
+  function addRow(label, fixed) {
+    var lab;
+    if (fixed) { lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = label; lab.dataset.label = label; }
+    else { lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Your label'; lab.setAttribute('aria-label', 'Role label'); }
+    var names = document.createElement('input'); names.type = 'text'; names.className = 'names'; names.autocomplete = 'off';
+    names.setAttribute('aria-label', (label || 'Custom role') + ' names');
+    $('roles').appendChild(lab); $('roles').appendChild(names);
+  }
+  ROLE_LABELS.forEach(function (l) { addRow(l, true); });
+  for (var i = 0; i < CUSTOM; i++) addRow('', false);
+
+  function roles() {
+    var out = [], kids = $('roles').children;
+    for (var i = 0; i < kids.length; i += 2) {
+      var label = kids[i].dataset.label || kids[i].value.trim(), names = kids[i + 1].value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (names.length) out.push({ label: label || 'Role ' + (i / 2 + 1), names: names });
+    }
+    return out;
+  }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function paint(text) { $('out').innerHTML = esc(text).replace(/&lt;[A-Z][A-Z0-9-]*&gt;|\[Confidentiality notice removed\]/g, function (t) { return '<span class="t">' + t + '</span>'; }); }
+
+  function run() {
+    var text = $('input').value;
+    if (!text.trim()) { $('input').focus(); return; }
+    last = EmailScrub.scrub(text, { roles: roles(), kill: $('kill').value.split('\n'), note: $('note').checked });
+    acknowledged = false;
+    paint(last.text);
+    var c = last.counts, chips = [
+      ['people', last.people.length], ['names replaced', c.names + c.roles], ['emails', c.emails], ['phones', c.phones], ['dates', c.dates],
+      ['addresses', c.addresses + c.postal], ['ID numbers', c.ids], ['links', c.urls], ['your terms', c.terms], ['notices removed', c.disclaimers]];
+    $('counts').textContent = '';
+    chips.forEach(function (x) { if (x[1]) { var s = document.createElement('span'); s.className = 'chip'; s.textContent = x[1] + ' ' + x[0]; $('counts').appendChild(s); } });
+    $('people').textContent = '';
+    var shown = last.people.concat(last.roles.filter(function (r) { return !last.people.some(function (p) { return p.token === r.token; }); }).map(function (r) { return { token: r.token, names: r.names.join(', '), sources: ['you'] }; }));
+    shown.concat(last.terms.map(function (t) { return { token: t.token, names: t.text, sources: ['you'] }; })).forEach(function (p) {
+      var li = document.createElement('li'), code = document.createElement('code'); code.textContent = p.token;
+      li.appendChild(code); li.appendChild(document.createTextNode(' = ' + p.names + ' (' + p.sources.join(', ') + ')')); $('people').appendChild(li);
+    });
+    $('people-sum').textContent = 'What was replaced (' + shown.length + (last.terms.length ? ' + ' + last.terms.length + ' terms' : '') + '): stays on this page';
+    check();
+    $('res').hidden = false; $('copied').textContent = '';
+    $('res').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function check() {
+    var box = $('leak'); box.textContent = ''; box.className = '';
+    if (last.leaks.length && !acknowledged) {
+      box.className = 'alarm';
+      box.appendChild(document.createTextNode('Still in the text: ' + last.leaks.join(', ') + '. Add them to "Always remove" and scrub again. '));
+      var b = document.createElement('button'); b.textContent = 'I checked: copy anyway'; b.onclick = function () { acknowledged = true; check(); }; box.appendChild(b);
+      $('copy').disabled = true;
+    } else {
+      $('copy').disabled = false;
+      var p = document.createElement('p'); p.className = 'status ' + (last.warnings.length ? 'warn' : 'ok'); p.style.margin = '0 0 10px';
+      p.textContent = last.warnings.length ? 'Check before copying: ' + last.warnings.join(' ') : 'Leak check passed. Read it over once before you send it anywhere.';
+      box.appendChild(p);
+    }
+  }
+  $('go').onclick = run;
+  $('input').addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
+  $('file').onchange = function () {
+    var f = $('file').files[0]; if (!f) return;
+    f.text().then(function (t) { $('input').value = t; $('file').value = ''; });
+  };
+  $('clear').onclick = function () {
+    $('input').value = ''; $('kill').value = '';
+    Array.prototype.forEach.call($('roles').querySelectorAll('input'), function (i) { i.value = ''; });
+    last = null; $('out').textContent = ''; $('people').textContent = ''; $('res').hidden = true; $('input').focus();
+  };
+  $('copy').onclick = function () {
+    if (!last) return;
+    var text = last.text, done = function (ok) { $('copied').textContent = ok ? 'Copied.' : 'Copy was blocked: select the text above and press Ctrl+C.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback); else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); done(ok);
+    }
+  };
+})();
+</script>
+</body></html>

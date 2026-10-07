@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Thread Scrubber</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2230;--muted:#5b6474;--line:#d7dce4;--accent:#1f5fbf;--accent-ink:#fff;--ok:#11702a;--warn:#8a5300;--bad:#b00020;--tok:#e6eefc;--tokink:#174ea6;--soft:#eef1f5;--alarm:#fdecee}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1c2027;--ink:#e6e9ee;--muted:#9aa3b2;--line:#323844;--accent:#6ea0f0;--accent-ink:#0d1117;--ok:#5cc983;--warn:#e0a54a;--bad:#ff7b8a;--tok:#22324d;--tokink:#a9c6ff;--soft:#262b34;--alarm:#3a1f25}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1c2027;--ink:#e6e9ee;--muted:#9aa3b2;--line:#323844;--accent:#6ea0f0;--accent-ink:#0d1117;--ok:#5cc983;--warn:#e0a54a;--bad:#ff7b8a;--tok:#22324d;--tokink:#a9c6ff;--soft:#262b34;--alarm:#3a1f25}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+main{max-width:980px;margin:0 auto;padding:22px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
+input[type=text],textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--card);color:var(--ink)}
+textarea{font:13px/1.5 Consolas,ui-monospace,monospace}
+.roles{display:grid;grid-template-columns:minmax(110px,180px) 1fr;gap:8px 10px;align-items:center}
+.roles .lab{font-weight:600}
+.roles input.labin{font-weight:600}
+button{font:inherit;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.big{font-size:17px;padding:10px 26px}
+button:disabled{opacity:.45;cursor:default}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{background:var(--soft);border-radius:12px;padding:2px 10px;font-size:13px}
+.status{font-weight:600}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.alarm{border:2px solid var(--bad);background:var(--alarm);border-radius:6px;padding:10px 12px;margin:0 0 10px}
+pre#out{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:12px;max-height:520px;overflow:auto;font:13px/1.5 Consolas,ui-monospace,monospace;margin:10px 0}
+pre#out .t{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 2px}
+ul.people{margin:4px 0 0;padding-left:18px}ul.people li{margin:2px 0}
+ul.people code{background:var(--tok);color:var(--tokink);border-radius:3px;padding:0 3px}
+details summary{cursor:pointer;color:var(--accent)}
+footer{color:var(--muted);font-size:13px;margin-top:18px}
+@media (max-width:560px){.roles{grid-template-columns:1fr}.roles .lab,.roles input.labin{margin-top:6px}}
+</style></head><body><main>
+<h1>Email Thread Scrubber</h1>
+<p class="sub">Paste a thread, name the people who matter, and copy out a version with the personal details taken out. <b>Nothing leaves this page.</b> It has no network access and saves nothing.</p>
+<p id="js" class="status bad">JavaScript is off, so this page cannot run.</p>
+
+<section class="card">
+  <h2>1. Paste the thread</h2>
+  <label for="input">Email thread or any text</label>
+  <textarea id="input" rows="10" placeholder="Paste here" autofocus></textarea>
+  <div class="bar" style="margin-top:8px"><label for="file" style="margin:0">or open a .txt file</label><input type="file" id="file" accept=".txt,text/plain"></div>
+</section>
+
+<section class="card">
+  <h2>2. Who's who (optional)</h2>
+  <p class="sub" style="margin-bottom:10px">Names you enter become the role, everywhere: <code>&lt;CLIENT&gt;</code> reads better than <code>&lt;PERSON-3&gt;</code>. Separate forms with commas, e.g. <i>Robert Smith, Bob</i>. Everyone else is found and numbered automatically.</p>
+  <div class="roles" id="roles"></div>
+</section>
+
+<section class="card">
+  <h2>3. Always remove (optional)</h2>
+  <label for="kill">One per line: project names, account names, anything else that identifies the people or business</label>
+  <textarea id="kill" rows="3"></textarea>
+  <div class="bar" style="margin-top:12px">
+    <button id="go" class="primary big">Scrub</button>
+    <button id="clear">Clear everything</button>
+    <label style="display:inline;margin:0;color:var(--ink)"><input type="checkbox" id="note" checked> Add a note asking the AI to keep the placeholders</label>
+  </div>
+</section>
+
+<section class="card" id="res" hidden>
+  <h2>4. Check and copy</h2>
+  <div class="chips" id="counts"></div>
+  <div id="leak"></div>
+  <details id="people-box"><summary id="people-sum">People found</summary><ul class="people" id="people"></ul></details>
+  <pre id="out"></pre>
+  <div class="bar"><button id="copy" class="primary">Copy</button><span id="copied" class="status ok" role="status"></span></div>
+  <p class="sub" style="margin:10px 0 0">The AI's reply will use the same placeholders. Swap the real names back in as you paste it into your email.</p>
+</section>
+
+<footer>Version <span id="ver"></span> · Runs entirely in your browser · Blocked from the network by its own security policy · Apache-2.0 licence</footer>
+</main>
+
+<script>/* Word lists for email-scrub. Lists grow; rules in engine.js should not.
+ * commonEN, commonFR and months: never a name on their own. notNames: places, organisation words, titles and
+ * email furniture. firstNames: common English and French given names. wordlikeFirstNames: given names that are also
+ * ordinary words, replaced only when capitalized.
+ */
+(function (root) {
+  'use strict';
+  var api = {
+    commonEN: [
+    "a", "about", "above", "after", "again", "against", "all", "almost", "along", "already", "also", "although",
+    "always", "am", "among", "an", "and", "another", "any", "anyone", "anything", "are", "around", "as", "at",
+    "back", "based", "be", "because", "been", "before", "being", "below", "best", "better", "between", "beyond",
+    "both", "but", "by", "came", "can", "cannot", "come", "coming", "concerning", "consequently", "considering",
+    "could", "despite", "did", "do", "does", "doing", "done", "down", "due", "during", "each", "effective", "either",
+    "else", "enough", "even", "ever", "every", "everyone", "everything", "except", "far", "few", "finally", "first",
+    "firstly", "following", "for", "found", "from", "further", "furthermore", "gave", "get", "give", "given", "go",
+    "going", "got", "had", "has", "have", "having", "he", "hence", "her", "here", "hers", "him", "his", "how",
+    "however", "if", "importantly", "in", "including", "indeed", "instead", "into", "is", "it", "its", "itself",
+    "just", "keep", "kept", "last", "lastly", "later", "least", "left", "less", "let", "like", "likely", "likewise",
+    "little", "long", "made", "make", "many", "may", "me", "meanwhile", "might", "more", "moreover", "most", "much",
+    "must", "my", "namely", "near", "nearly", "need", "neither", "never", "nevertheless", "next", "no",
+    "nonetheless", "none", "nor", "not", "notably", "note", "noted", "nothing", "notwithstanding", "now", "of",
+    "off", "often", "on", "once", "one", "only", "or", "other", "others", "otherwise", "our", "out", "over",
+    "overall", "own", "particularly", "pending", "per", "perhaps", "please", "possibly", "pursuant", "quite",
+    "rather", "regarding", "regardless", "related", "remain", "remains", "respectively", "said", "same", "say",
+    "second", "secondly", "see", "seen", "several", "shall", "she", "should", "similarly", "since", "so", "some",
+    "someone", "something", "specifically", "still", "subject", "subsequently", "such", "take", "taken", "than",
+    "that", "the", "their", "them", "themselves", "then", "there", "thereafter", "thereby", "therefore", "therein",
+    "thereof", "thereto", "these", "they", "third", "thirdly", "this", "those", "though", "three", "through", "thus",
+    "to", "together", "too", "toward", "towards", "two", "ultimately", "under", "unless", "until", "up", "upon",
+    "us", "use", "used", "using", "usually", "very", "was", "we", "well", "were", "what", "when", "where", "whereas",
+    "whereby", "wherein", "whether", "which", "while", "who", "whom", "whose", "why", "will", "with", "within",
+    "without", "would", "yes", "yet", "you", "your", "yours"
+    ],
+    commonFR: [
+    "a", "afin", "ainsi", "alors", "apres", "au", "aucun", "aucune", "aupres", "aussi", "autant", "autre", "autres",
+    "aux", "avant", "avec", "avoir", "bien", "car", "ce", "ceci", "cela", "celle", "celles", "celui", "cependant",
+    "certain", "certaine", "certaines", "certains", "ces", "cet", "cette", "ceux", "chacun", "chaque", "chez",
+    "comme", "comment", "compte", "concernant", "conformement", "contre", "dans", "de", "debut", "dehors", "deja",
+    "depuis", "des", "desormais", "dessous", "dessus", "deux", "deuxieme", "doit", "doivent", "donc", "dont", "du",
+    "duquel", "durant", "egalement", "elle", "elles", "en", "encore", "enfin", "ensuite", "entre", "est", "et",
+    "etaient", "etait", "etant", "ete", "etre", "eux", "fait", "faire", "finalement", "fin", "fois", "font", "grace",
+    "hors", "ici", "il", "ils", "jusqu", "jusque", "la", "laquelle", "le", "lequel", "les", "lesquelles", "lesquels",
+    "leur", "leurs", "lors", "lorsque", "lui", "ma", "mais", "malgre", "me", "meme", "memes", "mes", "mien", "moins",
+    "mon", "moyen", "ne", "neanmoins", "ni", "non", "nos", "notamment", "notre", "nous", "nouveau", "on", "ont",
+    "ou", "outre", "par", "parce", "parmi", "pas", "pendant", "peu", "peut", "peuvent", "plus", "plusieurs",
+    "plutot", "pour", "pourquoi", "pourtant", "premier", "premiere", "pres", "puis", "puisque", "quand", "quant",
+    "que", "quel", "quelle", "quelles", "quelque", "quelques", "quels", "qui", "quoi", "sa", "sans", "sauf", "se",
+    "selon", "sera", "serait", "ses", "seul", "seule", "seulement", "si", "sinon", "soit", "son", "sont", "sous",
+    "souvent", "suite", "suivant", "sur", "ta", "tandis", "tant", "te", "tel", "telle", "telles", "tels", "toujours",
+    "tous", "tout", "toute", "toutes", "trois", "trop", "tu", "un", "une", "vers", "voici", "voila", "vos", "votre",
+    "vous", "y"
+    ],
+    months: [
+    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November",
+    "December", "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Sept", "Oct", "Nov", "Dec", "janvier",
+    "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre",
+    "janv", "fevr", "avr", "juil", "sept", "oct", "nov", "dec", "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
+    ],
+    notNames: [
+    "Inc", "Ltd", "LLC", "LLP", "Corp", "Corporation", "Company", "Co", "Group", "Team", "Department", "Office",
+    "Services", "Service", "Solutions", "Consulting", "Partners", "Associates", "Holdings", "Limited", "Canada",
+    "Ontario", "Quebec", "Québec", "Alberta", "Manitoba", "Saskatchewan", "Nova", "Scotia", "Brunswick",
+    "Newfoundland", "Labrador", "Columbia", "Yukon", "Nunavut", "Territories", "Toronto", "Ottawa", "Montreal",
+    "Montréal", "Vancouver", "Calgary", "Edmonton", "Winnipeg", "Halifax", "Gatineau", "Kingston", "Hamilton",
+    "Waterloo", "London", "Victoria", "Regina", "Saskatoon", "Moncton", "Fredericton", "Charlottetown", "Sherbrooke",
+    "Laval", "Longueuil", "USA", "America", "American", "Canadian", "English", "French", "Français", "Anglais",
+    "Google", "Microsoft", "Outlook", "Gmail", "Teams", "Zoom", "Excel", "Word", "PowerPoint", "PDF", "Monday",
+    "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Subject", "Objet", "Sent", "Envoyé",
+    "Attachments", "Attachment", "Re", "Fwd", "Fw", "TR", "RE", "FW", "Please", "Thanks", "Thank", "Regards", "Best",
+    "Cheers", "Sincerely", "Merci", "Cordialement", "Bonjour", "Hello", "Dear", "Hi", "Hey", "Note", "Notes",
+    "Meeting", "Agenda", "Minutes", "Call", "Update", "Project", "Invoice", "Contract", "Agreement", "Schedule",
+    "Appendix", "Section", "Clause", "Article", "Policy", "Act", "Law", "Court", "Board", "Committee", "Council",
+    "Ministry", "Government", "Province", "City", "Town", "County", "State", "Street", "Avenue", "Road", "Drive",
+    "Boulevard", "Suite", "Unit", "Floor", "Building", "Tower", "Centre", "Center", "Plaza", "Square", "North",
+    "South", "East", "West", "Nord", "Sud", "Est", "Ouest", "New", "Old", "Great", "Saint", "St", "Ste", "Mount",
+    "Lake", "River", "Bay", "Park", "Hill", "Valley", "Island", "Bank", "Fund", "Trust", "Insurance", "Health",
+    "Hospital", "Clinic", "University", "College", "School", "Institute", "Association", "Foundation", "Union",
+    "Church", "Mr", "Mrs", "Ms", "Mx", "Dr", "Prof", "Me", "Mme", "Mlle", "Madame", "Monsieur", "Sir", "Madam",
+    "CEO", "CFO", "COO", "CTO", "VP", "President", "Director", "Manager", "Supervisor", "Coordinator", "Assistant",
+    "Officer", "Advisor", "Analyst", "Counsel", "Lawyer", "Partner", "Associate", "Clerk", "Paralegal", "Accountant",
+    "Consultant", "Client", "Customer", "Vendor", "Supplier", "Contractor", "Employee", "Employer", "Tenant",
+    "Landlord", "Buyer", "Seller", "Purchaser", "Plaintiff", "Defendant", "Applicant", "Respondent"
+    ],
+    firstNames: [
+    "Aaron", "Abigail", "Adam", "Adrian", "Aiden", "Alain", "Alan", "Albert", "Alex", "Alexandra", "Alexander",
+    "Alexandre", "Alexis", "Alice", "Alicia", "Alison", "Allison", "Amanda", "Amber", "Amelia", "Amy", "Andre",
+    "André", "Andrea", "Andrew", "Angela", "Angelique", "Anna", "Anne", "Annie", "Anthony", "Antoine", "Ashley",
+    "Audrey", "Austin", "Barbara", "Benjamin", "Benoit", "Benoît", "Bernard", "Beth", "Bethany", "Betty", "Brandon",
+    "Brenda", "Brent", "Brian", "Brittany", "Bruce", "Bryan", "Caleb", "Cameron", "Carl", "Carla", "Carlos",
+    "Carmen", "Caroline", "Catherine", "Cathy", "Charles", "Charlie", "Charlotte", "Chloe", "Chloé", "Chris",
+    "Christian", "Christina", "Christine", "Christopher", "Claire", "Claude", "Claudia", "Colin", "Connor", "Craig",
+    "Crystal", "Cynthia", "Dale", "Damien", "Dan", "Daniel", "Danielle", "Darren", "David", "Deborah", "Debra",
+    "Denis", "Dennis", "Derek", "Diana", "Diane", "Dominic", "Dominique", "Donald", "Donna", "Doris", "Dorothy",
+    "Douglas", "Dylan", "Edward", "Elaine", "Eleanor", "Elena", "Elizabeth", "Ellen", "Emily", "Emma", "Emmanuel",
+    "Eric", "Éric", "Erica", "Erin", "Ethan", "Étienne", "Eugene", "Evan", "Evelyn", "Fabien", "Felix", "Félix",
+    "Fernand", "Florence", "Frances", "Francis", "Francine", "Francois", "François", "Françoise", "Gabriel",
+    "Gabrielle", "Gail", "Gary", "Genevieve", "Geneviève", "George", "Georges", "Gerald", "Gérard", "Gilles", "Gina",
+    "Glen", "Glenn", "Gloria", "Gordon", "Greg", "Gregory", "Guillaume", "Hannah", "Harold", "Harry", "Heather",
+    "Helen", "Hélène", "Henri", "Henry", "Hugo", "Ian", "Isabelle", "Jacob", "Jacqueline", "Jacques", "James",
+    "Jamie", "Jane", "Janet", "Janice", "Jason", "Jean", "Jeanne", "Jeff", "Jeffrey", "Jennifer", "Jeremy", "Jérôme",
+    "Jerry", "Jesse", "Jessica", "Jill", "Joan", "Joanne", "Joe", "Joel", "Johanne", "John", "Jonathan", "Jordan",
+    "Jose", "Joseph", "Josée", "Joshua", "Joyce", "Judith", "Judy", "Julia", "Julian", "Julie", "Julien", "Justin",
+    "Karen", "Karine", "Kate", "Katherine", "Kathleen", "Kathryn", "Kathy", "Katie", "Keith", "Kelly", "Ken",
+    "Kenneth", "Kevin", "Kim", "Kimberly", "Kyle", "Laura", "Laurent", "Lauren", "Laurie", "Lawrence", "Leah",
+    "Linda", "Lindsay", "Lisa", "Logan", "Louis", "Louise", "Luc", "Lucas", "Lucie", "Luke", "Lynn", "Madeleine",
+    "Mandy", "Manon", "Marc", "Marcel", "Margaret", "Maria", "Marie", "Marilyn", "Mario", "Marion", "Martha",
+    "Martin", "Mary", "Maryse", "Mathieu", "Matthew", "Maurice", "Megan", "Melanie", "Mélanie", "Melissa", "Michael",
+    "Michel", "Michelle", "Mike", "Mireille", "Monique", "Morgan", "Nancy", "Natalie", "Nathalie", "Nathan",
+    "Nicholas", "Nicolas", "Nicole", "Noah", "Normand", "Olivia", "Olivier", "Pamela", "Pascal", "Patricia",
+    "Patrick", "Paul", "Paula", "Pauline", "Peter", "Philip", "Philippe", "Pierre", "Rachel", "Ralph", "Raphaël",
+    "Raymond", "Rebecca", "Réjean", "Renee", "Renée", "Richard", "Robert", "Roberta", "Roger", "Ronald", "Rosa",
+    "Ruth", "Ryan", "Samantha", "Samuel", "Sandra", "Sara", "Sarah", "Scott", "Sean", "Sebastien", "Sébastien",
+    "Serge", "Sharon", "Shawn", "Sheila", "Shirley", "Simon", "Sophie", "Stephane", "Stéphane", "Stephanie",
+    "Stéphanie", "Stephen", "Steve", "Steven", "Susan", "Suzanne", "Sylvain", "Sylvie", "Tammy", "Teresa", "Terry",
+    "Theresa", "Thomas", "Tiffany", "Timothy", "Tina", "Todd", "Tracy", "Travis", "Tyler", "Valerie", "Valérie",
+    "Vanessa", "Victor", "Victoria", "Vincent", "Virginie", "Walter", "Wayne", "Wendy", "William", "Yannick", "Yves",
+    "Zachary", "Zoe"
+    ],
+    wordlikeFirstNames: [
+    "Will", "May", "Mark", "Grant", "Bill", "Rose", "Hope", "Joy", "Art", "Faith", "Pat", "Sue", "Guy", "Rich",
+    "Frank", "Jack", "April", "June", "Summer", "Dawn", "Sunny", "Chase", "Hunter", "Drew", "Gene", "Ray", "Sky",
+    "Eve", "Max", "Rob", "Dean", "Earl", "Miles", "Bob", "Ivy", "Holly", "Iris", "Pearl", "Ruby", "Amber", "Crystal",
+    "Hazel", "Jade", "Autumn", "Destiny", "Harmony", "Grace", "Victor", "Charity", "Rock", "Gale", "Lance",
+    "Sterling", "Penny", "Norm", "Bud", "Rusty", "Woody", "Sandy"
+    ]
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrubLists = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+<script>/* email-scrub engine: removes personal details from a pasted email thread, locally.
+ * Rules live here; word lists live in lists.js. Runs in the browser and in node (tests).
+ * scrub(text, { roles: [{ label, names: [] }], kill: [], note: true }) -> { text, people, counts, leaks, warnings }
+ */
+(function (root) {
+  'use strict';
+  var L = (typeof module !== 'undefined' && module.exports) ? require('./lists.js') : root.EmailScrubLists;
+
+  // ---------- helpers ----------
+  function fold(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  var COMMON = new Set(L.commonEN.concat(L.commonFR, L.months, L.notNames).map(fold));
+  var FIRST = new Set(L.firstNames.map(fold));
+  var WORDLIKE_FIRST = new Set(L.wordlikeFirstNames.map(fold));
+  var CAP = '\\p{Lu}[\\p{L}\'’-]*';                       // Capitalized word (also McKay, O'Neil, Jean-Luc)
+  var NB = '(?<![\\p{L}\\p{N}])', NA = '(?![\\p{L}\\p{N}])';
+  // Literal, case- and accent-tolerant, whole-word pattern for a term the user typed.
+  function termPattern(t) {
+    var map = { a: 'aàâä', c: 'cç', e: 'eéèêë', i: 'iîï', o: 'oôö', u: 'uùûü', y: 'yÿ' };
+    var body = fold(t.trim()).split('').map(function (ch) {
+      if (map[ch]) return '[' + map[ch] + ']';
+      if (/\s/.test(ch)) return '\\s+';
+      if (ch === "'" || ch === '’') return "['’]";
+      return esc(ch);
+    }).join('');
+    return NB + body + NA;
+  }
+  var TOKEN_RE = /<[A-Z][A-Z0-9-]*>|\[Confidentiality notice removed\]/g;
+  // Apply a replacement only outside tokens already placed, so later rules never rewrite a token.
+  function outside(text, re, fn) {
+    var out = '', last = 0, m; TOKEN_RE.lastIndex = 0;
+    var parts = [];
+    while ((m = TOKEN_RE.exec(text))) { parts.push([last, m.index, false]); parts.push([m.index, m.index + m[0].length, true]); last = m.index + m[0].length; }
+    parts.push([last, text.length, false]);
+    parts.forEach(function (p) { var s = text.slice(p[0], p[1]); out += p[2] ? s : s.replace(re, fn); });
+    return out;
+  }
+  function titleCase(w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }
+  function isNameWord(w) { return /^\p{Lu}[\p{L}'’-]*$/u.test(w) && w.replace(/[^\p{L}]/gu, '').length >= 2; }
+
+  // ---------- patterns ----------
+  var EMAIL = /[\p{L}\p{N}._%+'’-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu;
+  var URL = /\b(?:https?:\/\/|www\.)[^\s<>"')\]]+/gi;
+  var PHONE = /(?<![\p{L}\p{N}.])(?:\+?1[ .-]?)?(?:\(\d{3}\)\s?|\d{3}[ .-])\d{3}[ .-]\d{4}(?:\s*(?:x|ext\.?|extension|poste|#)\s*\d{1,6})?(?![\p{N}])|(?<![\p{L}\p{N}])\+(?:[2-9]\d{0,2})(?:[ .-]?\(?\d{1,4}\)?){2,5}(?![\p{N}])/giu;
+  var POSTAL_CA = /(?<![\p{L}\p{N}])[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d(?![\p{L}\p{N}])/giu;
+  var ZIP_US = /(?<=\b(?:A[LKZR]|C[AOT]|DE|DC|FL|GA|HI|I[ADLN]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY])\s{1,2})\d{5}(?:-\d{4})?\b/g;
+  var STREET_TYPES = 'Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Crt|Crescent|Cres|Way|Place|Pl|Terrace|Terr|Parkway|Pkwy|Circle|Cir|Highway|Hwy|Trail|Square|Sq';
+  var ADDRESS = new RegExp('(?<![\\p{L}\\p{N}])(?:(?:Suite|Unit|Apt\\.?|Apartment|#)\\s*\\w+[,\\s]+)?\\d{1,6}[A-Za-z]?(?:-\\d{1,5})?\\s+(?:' + CAP + '\\s+){1,4}(?:' + STREET_TYPES + ')\\.?(?:\\s+(?:N|S|E|W|NE|NW|SE|SW|North|South|East|West|Est|Ouest|Nord|Sud))?(?:,?\\s*(?:Suite|Unit|Apt\\.?|#)\\s*\\w+)?(?![\\p{L}\\p{N}])'
+    + '|(?<![\\p{L}\\p{N}])\\d{1,6}[A-Za-z]?,?\\s+(?:rue|chemin|ch\\.|boulevard|boul\\.|av\\.|avenue|route|rang|place|montée|côte)\\s+(?:(?:de|du|des|de la|d[\'’]|la|le|l[\'’]|St-|Ste-|Saint-|Sainte-)\\s*)*' + CAP + '(?:[\\s-]+' + CAP + '){0,3}', 'gu');
+  var PO_BOX = /\b(?:P\.?\s?O\.?\s?Box|C\.?\s?P\.?|Case postale)\s*\d+\b/gi;
+  var SIN = /(?<![\p{N}])\d{3}[ -]\d{3}[ -]\d{3}(?![\p{N}])/gu;           // checked with Luhn
+  var SSN = /(?<![\p{N}-])\d{3}-\d{2}-\d{4}(?![\p{N}-])/g;
+  var CARD = /(?<![\p{N}])(?:\d[ -]?){12,18}\d(?![\p{N}])/gu;            // checked with Luhn
+  var LABELLED_ID = /\b((?:Account|Acct|Policy|Claim|Member|Employee|Customer|Client|Case|File|Matter|Patient|Student|Licen[cs]e|Passport|Health card|Dossier|Compte|Police|Réclamation|Matricule)\s*(?:no\.?|number|#|n[o°]\.?|numéro)?\s*[:#]?\s*)([A-Z0-9][A-Z0-9-]{3,})\b/giu;
+  function luhn(d) { var s = 0; for (var i = 0; i < d.length; i++) { var x = +d[d.length - 1 - i]; if (i % 2) { x *= 2; if (x > 9) x -= 9; } s += x; } return s % 10 === 0; }
+
+  // Dates. Same calendar day -> same token, numbered in order of first appearance.
+  var MON = { jan: 1, feb: 2, fev: 2, mar: 3, apr: 4, avr: 4, may: 5, mai: 5, jun: 6, jui: 6, jul: 7, aug: 8, aou: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  var MONTHS_RE = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|janv(?:ier)?|f[ée]v(?:r(?:ier)?)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|d[ée]c(?:embre)?)\\.?';
+  var WDAY = '(?:(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)(?:day|nesday|sday|urday)?|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche),?\\s+';
+  var DATE = new RegExp(
+    '(?:' + WDAY + ')?(?:' +
+      '\\d{4}-\\d{1,2}-\\d{1,2}' +                                         // 2024-03-12
+      '|\\d{1,2}[/.]\\d{1,2}[/.](?:\\d{4}|\\d{2})' +                      // 12/03/2024
+      '|' + MONTHS_RE + '\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}' +       // March 12, 2024
+      '|\\d{1,2}(?:er|st|nd|rd|th)?\\s+' + MONTHS_RE + ',?\\s+\\d{4}' + // 12 March 2024 / 12 mars 2024
+    ')', 'giu');
+  var PARTIAL_DATE = new RegExp('(?<![\\p{L}\\p{N}])(?:(' + MONTHS_RE.replace('\\.?', '') + ')\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?![\\p{N}:])(?!,?\\s*\\d{4})|(\\d{1,2})(?:er|st|nd|rd|th)?\\s+(' + MONTHS_RE.replace('\\.?', '') + ')\\.?(?!\\s*,?\\s*\\d{4}))(?![\\p{L}])', 'giu');
+  function dateKey(s) {
+    var t = fold(s).replace(/^(?:[a-z]+,?\s+)?(?=\d|[a-z]{3})/, function (m) { return /^(mon|tue|wed|thu|fri|sat|sun|lun|mar|mer|jeu|ven|sam|dim)/.test(m) && !/^mar(s|ch)/.test(m) ? '' : m; });
+    var m;
+    if ((m = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t))) return +m[1] + '-' + +m[2] + '-' + +m[3];
+    if ((m = /([a-z]{3})[a-z.]*\s+(\d{1,2})\D+(\d{4})/.exec(t)) && MON[m[1]]) return +m[3] + '-' + MON[m[1]] + '-' + +m[2];
+    if ((m = /(\d{1,2})(?:er|st|nd|rd|th)?\s+([a-z]{3})[a-z.]*,?\s+(\d{4})/.exec(t)) && MON[m[2]]) return +m[3] + '-' + MON[m[2]] + '-' + +m[1];
+    return t.trim();
+  }
+
+  // ---------- discovery: who is in this thread ----------
+  var HEADER = /^[ \t>]*(From|To|Cc|CC|Bcc|De|À|A|Cci|Sender|Reply-To|Répondre à)\s?:[ \t]*(.*)$/gmi;
+  var WROTE = /^[ \t>]*(?:On\s+.+?,\s*|Le\s+.+?,?\s*)(.+?)\s*(?:<[^>]*>|\[mailto:[^\]]*\])?\s*(?:wrote|a écrit)\s*:\s*$/gmi;
+  var GREETING = /^[ \t>]*(?:Hi|Hello|Hey|Dear|Good (?:morning|afternoon|evening)|Morning|Bonjour|Bonsoir|Salut|Allo|Allô|Cher|Chère|Chers)\b[ \t,]+(.+?)[ \t]*[,!:.]?[ \t]*$/gmi;
+  var SIGNOFF = /^[ \t>]*(?:Thanks|Thank you|Thanks again|Many thanks|Thx|Regards|Best regards|Kind regards|Warm regards|Warmly|Best|All the best|Cheers|Sincerely|Yours truly|Yours sincerely|Respectfully|Talk soon|Merci|Merci beaucoup|Merci encore|Cordialement|Bien cordialement|Salutations|Sinc[eè]res salutations|Bien à vous|Amitiés|À bientôt|Bonne journée)[ \t]*[,.!]?[ \t]*(.*)$/gmi;
+  var TITLE = new RegExp(NB + '(?:Mr|Mrs|Ms|Mx|Miss|Dr|Prof|Me|M|Mme|Mlle|Madame|Monsieur)\\.?[ \\t]+(' + CAP + '(?:[ \\t]+' + CAP + '){0,2})', 'gu');
+  var PROSE_NAME = new RegExp(NB + '(' + CAP + ')[ \\t]+(' + CAP + ')' + NA, 'gu');
+
+  function splitPeople(s) {
+    // "Smith, John; Doe, Jane" | "John Smith, Jane Doe" | "John and Mary"
+    s = s.replace(/<[^>]*>|\[mailto:[^\]]*\]|\([^)]*@[^)]*\)|"|'/g, ' ').replace(EMAIL, ' ');
+    var parts = /;/.test(s) ? s.split(';') : s.split(/,|\band\b|\bet\b|&/i);
+    if (!/;/.test(s) && /^\s*\p{Lu}[\p{L}'’-]+\s*,\s*\p{Lu}[\p{L}'’-]+\s*$/u.test(s)) parts = [s];       // one "Last, First"
+    return parts.map(function (p) { return p.trim(); }).filter(Boolean);
+  }
+  function parseName(raw) {
+    var s = raw.replace(/\s+/g, ' ').replace(/^(?:Mr|Mrs|Ms|Mx|Miss|Dr|Prof|Me|M|Mme|Mlle|Madame|Monsieur)\.?\s+/u, '').replace(/[.,;:!]+$/, '').replace(/['’]s$/, '').trim();
+    var m = /^(\p{Lu}[\p{L}'’-]+)\s*,\s*(\p{Lu}[\p{L}'’-]+(?:\s+\p{Lu}\.?)?)$/u.exec(s);  // Last, First
+    if (m) return { first: m[2].split(' ')[0], last: m[1] };
+    var words = s.split(' ').filter(function (w) { return !/^\p{Lu}\.$/u.test(w); });
+    if (!words.length || words.length > 4 || !words.every(isNameWord)) return null;
+    if (words.every(function (w) { return COMMON.has(fold(w)); })) return null;
+    if (words.length === 1) return { single: words[0] };
+    return { first: words[0], last: words[words.length - 1], middle: words.slice(1, -1) };
+  }
+
+  function scrub(input, opts) {
+    opts = opts || {};
+    var text = String(input || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ');
+    var counts = { emails: 0, phones: 0, dates: 0, addresses: 0, postal: 0, urls: 0, ids: 0, names: 0, terms: 0, roles: 0, disclaimers: 0 };
+    var warnings = [], originals = [];
+
+    // 0. noise: inline image references and phone sign-offs
+    text = text.replace(/\[cid:[^\]]*\]/gi, '').replace(/^[ \t>]*(?:Sent from my \w+|Get Outlook for \w+|Envoyé de mon \w+|Envoyé à partir de \w+.*)[ \t]*$/gmi, '');
+
+    // 1. find people
+    var people = [];   // { first, last, emails:Set, sources:Set, token }
+    function addPerson(p, source, email) {
+      if (!p) return;
+      if (p.single) {
+        // One word: an existing person's first or last name, else a first name when greeted or signed, else a surname.
+        var w = fold(p.single);
+        var byFirst = people.filter(function (q) { return q.first && fold(q.first) === w; });
+        var byLast = people.filter(function (q) { return q.last && fold(q.last) === w; });
+        if (byFirst.length === 1) p = { first: byFirst[0].first, last: byFirst[0].last };
+        else if (byLast.length === 1) p = { first: byLast[0].first, last: byLast[0].last };
+        else if (FIRST.has(w) || /greeting|sign-off|signature/.test(source)) p = { first: p.single };
+        else p = { last: p.single };
+      }
+      var fl = p.last && fold(p.last), ff = p.first && fold(p.first);
+      if (fl && COMMON.has(fl) && !ff) return;
+      var hit = people.find(function (q) {
+        if (email && q.emails.has(email)) return true;
+        if (fl && q.last && fold(q.last) === fl) return !ff || !q.first || fold(q.first) === ff;
+        if (!fl && ff && q.first && fold(q.first) === ff) return true;
+        if (fl && !q.last && q.first && ff && fold(q.first) === ff) return true;
+        return false;
+      });
+      if (!hit) { hit = { first: p.first || null, last: p.last || null, emails: new Set(), sources: new Set(), order: people.length }; people.push(hit); }
+      if (!hit.first && p.first) hit.first = p.first;
+      if (!hit.last && p.last) hit.last = p.last;
+      if (email) hit.emails.add(email);
+      hit.sources.add(source);
+    }
+    function fromEmail(e) {
+      var local = e.split('@')[0].replace(/\d+$/, '');
+      var bits = local.split(/[._-]+/).filter(function (b) { return /^\p{L}{2,}$/u.test(b); });
+      if (bits.length >= 2 && !bits.some(function (b) { return /^(?:info|admin|office|support|contact|noreply|no|reply|sales|hr|team|mail|service|help)$/i.test(b); }))
+        return { first: titleCase(bits[0]), last: titleCase(bits[bits.length - 1]) };
+      return null;
+    }
+    var m;
+    HEADER.lastIndex = 0;
+    while ((m = HEADER.exec(text))) {
+      if (m[1] === 'A' && !/@/.test(m[2])) continue;
+      var line = m[2];
+      var pair = /(?:"?([^"<>;\n]+?)"?\s*)?(?:<|\[mailto:)([^<>\s\]]+@[^<>\s\]]+)(?:>|\])/g, pm, seen = false;
+      while ((pm = pair.exec(line))) {
+        seen = true; var em = pm[2].toLowerCase(), disp = (pm[1] || '').replace(/^[,;\s]+/, '');
+        var parsed = disp ? parseName(disp) : null;
+        addPerson(parsed || fromEmail(em), 'header', em);
+      }
+      if (!seen) splitPeople(line).forEach(function (s) { if (EMAIL.test(s)) { EMAIL.lastIndex = 0; return; } addPerson(parseName(s), 'header'); });
+      (line.match(EMAIL) || []).forEach(function (em) { if (!people.some(function (q) { return q.emails.has(em.toLowerCase()); })) addPerson(fromEmail(em), 'header', em.toLowerCase()); });
+    }
+    WROTE.lastIndex = 0;
+    while ((m = WROTE.exec(text))) addPerson(parseName(m[1].replace(/.*\d{1,2}:\d{2}\s*(?:[AP]M)?,?\s*/i, '')), 'reply line');
+    GREETING.lastIndex = 0;
+    while ((m = GREETING.exec(text))) splitPeople(m[1]).forEach(function (s) { if (!/^(?:all|team|everyone|tous|toutes|à tous|everybody|folks|guys|there|sir|madam)$/i.test(s)) addPerson(parseName(s), 'greeting'); });
+    SIGNOFF.lastIndex = 0;
+    while ((m = SIGNOFF.exec(text))) {
+      if (m[1].trim()) { addPerson(parseName(m[1]), 'sign-off'); continue; }
+      var after = text.slice(m.index + m[0].length).split('\n').map(function (l) { return l.replace(/^[ \t>]+/, '').trim(); }).filter(Boolean)[0] || '';
+      if (after && !/[@\d]/.test(after) && after.split(/\s+/).length <= 4) addPerson(parseName(after), 'signature');
+    }
+    TITLE.lastIndex = 0;
+    while ((m = TITLE.exec(text))) addPerson(parseName(m[1]), 'title');
+    (text.match(EMAIL) || []).forEach(function (em) { var p = fromEmail(em); if (p) addPerson(p, 'email address', em.toLowerCase()); });
+    PROSE_NAME.lastIndex = 0;
+    while ((m = PROSE_NAME.exec(text))) {
+      var f = fold(m[1]), l = fold(m[2]);
+      if (FIRST.has(f) && !COMMON.has(l) && !FIRST.has(l) || (FIRST.has(f) && people.some(function (q) { return q.last && fold(q.last) === l; })))
+        addPerson({ first: m[1], last: m[2] }, 'text');
+    }
+
+    // 2. roles: the user's names collapse to the role token; a detected person who matches joins the role
+    var roles = (opts.roles || []).filter(function (r) { return r && r.label && (r.names || []).some(function (n) { return n.trim(); }); }).map(function (r) {
+      var label = String(r.label).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ROLE';
+      return { token: '<' + label + '>', names: r.names.map(function (n) { return n.trim(); }).filter(Boolean) };
+    });
+    var roleParts = [];   // [foldedName, token]
+    roles.forEach(function (r) {
+      r.names.forEach(function (n) {
+        roleParts.push([fold(n), r.token]);
+        var p = parseName(n);
+        if (p && p.last) roleParts.push([fold(p.last), r.token]);
+        if (p && p.first && p.last) roleParts.push([fold(p.first), r.token]);
+      });
+    });
+    function roleFor(name) { var f = fold(name); var hit = roleParts.find(function (x) { return x[0] === f; }); return hit ? hit[1] : null; }
+    var n = 0;
+    people.sort(function (a, b) { return a.order - b.order; }).forEach(function (p) {
+      p.token = (p.last && roleFor(p.last)) || (p.first && p.last && roleFor(p.first + ' ' + p.last)) || (!p.last && p.first && roleFor(p.first)) || null;
+      if (!p.token) p.token = '<PERSON-' + (++n) + '>';
+    });
+
+    // 3. disclaimers (whole paragraph)
+    text = text.split(/\n\s*\n/).map(function (para) {
+      var f = fold(para);
+      if ((/confidential|privileged/.test(f) && /intended recipient|notify the sender|received this (?:e-?mail|message) in error|delete (?:this|it)/.test(f)) ||
+          (/confidentiel|privilegi/.test(f) && /destinataire|par erreur|aviser l.expediteur|detruire/.test(f))) { counts.disclaimers++; return '[Confidentiality notice removed]'; }
+      return para;
+    }).join('\n\n');
+
+    // 4. addresses and links go whole first, so a name inside one never splits it
+    var domains = new Set();
+    (text.match(EMAIL) || []).forEach(function (e) { domains.add(e.split('@')[1].toLowerCase()); });
+    text = text.replace(/\[mailto:[^\]]*\]/gi, '').replace(/<\s*([^<>\s]+@[^<>\s]+)\s*>/g, ' $1');   // <a@b.c> -> a@b.c, so it becomes one <EMAIL>
+    text = outside(text, EMAIL, function (e) { counts.emails++; originals.push(e); return '<EMAIL>'; });
+    text = text.replace(/ {2,}<EMAIL>/g, ' <EMAIL>');
+    text = outside(text, URL, function (u) { counts.urls++; return '<URL>'; });
+
+    // 5. the kill list, then role names the user typed (longest first)
+    var killTokens = [];
+    (opts.kill || []).map(function (k) { return String(k).trim(); }).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (k, i) {
+      var tok = '<TERM-' + (i + 1) + '>'; killTokens.push([k, tok]); originals.push(k);
+      text = outside(text, new RegExp(termPattern(k), 'giu'), function () { counts.terms++; return tok; });
+    });
+    var roleStrings = [];
+    roles.forEach(function (r) { r.names.forEach(function (nm) { roleStrings.push([nm, r.token]); }); });
+    people.forEach(function (p) { if (/^<PERSON-/.test(p.token)) return; if (p.first && p.last) roleStrings.push([p.first + ' ' + p.last, p.token], [p.last + ', ' + p.first, p.token]); });
+    roleStrings.sort(function (a, b) { return b[0].length - a[0].length; }).forEach(function (x) {
+      originals.push(x[0]);
+      text = outside(text, new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu'), function (mm, poss) { counts.roles++; return x[1] + (poss || ''); });
+    });
+
+    // 6. structured identifiers
+    text = outside(text, LABELLED_ID, function (mm, label, id) { if (!/\d/.test(id)) return mm; counts.ids++; originals.push(id); return label + '<ID>'; });
+    text = outside(text, SSN, function (s) { counts.ids++; originals.push(s); return '<SSN>'; });
+    text = outside(text, SIN, function (s) { var d = s.replace(/\D/g, ''); if (!luhn(d)) return s; counts.ids++; originals.push(s); return '<SIN>'; });
+    text = outside(text, CARD, function (s) { var d = s.replace(/\D/g, ''); if (d.length < 13 || !luhn(d)) return s; counts.ids++; originals.push(s); return '<CARD>'; });
+    text = outside(text, PHONE, function (p) { if (p.replace(/\D/g, '').length < 10) return p; counts.phones++; originals.push(p); return '<PHONE>'; });
+    text = outside(text, PO_BOX, function () { counts.addresses++; return '<ADDRESS>'; });
+    text = outside(text, ADDRESS, function (a) { counts.addresses++; originals.push(a); return '<ADDRESS>'; });
+    text = outside(text, POSTAL_CA, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    text = outside(text, ZIP_US, function (p) { counts.postal++; originals.push(p); return '<POSTAL>'; });
+    var dates = new Map();
+    text = outside(text, DATE, function (d) { var k = dateKey(d); if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>'); counts.dates++; return dates.get(k); });
+    // A day and month without a year ("the March 28 deadline") shares the token of the one full date it matches.
+    text = outside(text, PARTIAL_DATE, function (d, mon1, day1, day2, mon2) {
+      var mo = MON[fold(mon1 || mon2).slice(0, 3)], day = +(day1 || day2);
+      if (!mo || day < 1 || day > 31) return d;
+      var same = Array.from(dates.keys()).filter(function (k) { return new RegExp('^\\d{4}-' + mo + '-' + day + '$').test(k); });
+      var k = same.length === 1 ? same[0] : mo + '-' + day;
+      if (!dates.has(k)) dates.set(k, '<DATE-' + (dates.size + 1) + '>');
+      counts.dates++; return dates.get(k);
+    });
+
+    // 7. people: full names, "Last, First", surnames, then first names that belong to exactly one person
+    var forms = [];
+    people.forEach(function (p) {
+      if (p.first && p.last) { forms.push([p.first + ' ' + (p.middle ? p.middle.join(' ') + ' ' : '') + p.last, p.token], [p.first + ' ' + p.last, p.token], [p.last + ', ' + p.first, p.token]); }
+      if (p.last) forms.push([p.last, p.token]);
+    });
+    people.forEach(function (p) {
+      if (!p.first) return;
+      var f = fold(p.first);
+      var owners = people.filter(function (q) { return q.first && fold(q.first) === f; });
+      if (owners.length !== 1) { if (owners[0] === p) warnings.push('More than one person is called ' + p.first + '; a first name on its own was left as written.'); return; }
+      forms.push([p.first, p.token, WORDLIKE_FIRST.has(f) || COMMON.has(f)]);
+    });
+    forms.sort(function (a, b) { return b[0].length - a[0].length; }).forEach(function (x) {
+      originals.push(x[0]);
+      var re = new RegExp(termPattern(x[0]) + "(['’]s)?", 'giu');   // word-like first names: capitalized only (below)
+      text = outside(text, re, function (mm, poss, off, whole) {
+        if (x[2] && !/^\p{Lu}/u.test(mm)) return mm;
+        counts.names++; return x[1] + (poss || '');
+      });
+    });
+
+    // 8. tidy and the preservation note
+    text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (opts.note !== false) text = 'Note: placeholders such as <PERSON-1> or <DATE-2> stand for removed details. Keep them exactly as written in any reply.\n\n' + text;
+
+    // 9. leak check: nothing that was removed may still be in the output
+    var secrets = [], seen = new Set();
+    originals.concat(roles.flatMap(function (r) { return r.names; })).forEach(function (o) {
+      o = String(o).trim(); if (o.length < 2 || seen.has(fold(o))) return; seen.add(fold(o)); secrets.push(o);
+    });
+    var leaks = leakCheck(text, secrets);
+    var bare = text.replace(TOKEN_RE, ' ');
+    // Organisations behind the email domains that still appear by name (the user decides; they may not be sensitive).
+    var orgs = [];
+    domains.forEach(function (d) {
+      var label = d.split('.').slice(-2)[0];
+      if (/^(?:gmail|googlemail|outlook|hotmail|live|msn|yahoo|icloud|me|mac|aol|proton|protonmail|gmx|videotron|bell|sympatico|rogers|shaw|telus|cogeco|example)$/.test(label)) return;
+      var word = label.split(/[-_]/)[0];
+      if (word.length < 3) return;
+      var m = new RegExp(NB + esc(word) + '[\\p{L}]*(?:[ \\t]+' + CAP + ')?', 'iu').exec(bare);
+      if (m && orgs.indexOf(m[0]) < 0) orgs.push(m[0]);
+    });
+    if (orgs.length) warnings.push('These organisation names match the email addresses and are still in the text: ' + orgs.join(', ') + '. Add them to My company or Always remove if they identify anyone.');
+    if (/@[\p{L}\p{N}-]+\.[\p{L}]{2,}/u.test(bare)) warnings.push('An "@" address fragment is still in the text.');
+    if (/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(bare)) warnings.push('A number that looks like part of a phone number is still in the text.');
+
+    return {
+      text: text,
+      people: people.map(function (p) { return { token: p.token, names: [p.first, p.last].filter(Boolean).join(' '), emails: Array.from(p.emails), sources: Array.from(p.sources) }; }),
+      roles: roles.map(function (r) { return { token: r.token, names: r.names }; }),
+      terms: killTokens.map(function (k) { return { token: k[1], text: k[0] }; }),
+      counts: counts, leaks: leaks, warnings: warnings, secrets: secrets
+    };
+  }
+
+  // Re-run after the user edits the output: which removed values are back in the text?
+  function leakCheck(text, secrets) {
+    var bare = String(text).replace(TOKEN_RE, ' ');
+    return (secrets || []).filter(function (o) { return new RegExp(termPattern(o), 'iu').test(bare); });
+  }
+
+  var api = { scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.1.0' };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  $('js').textContent = ''; $('js').hidden = true; $('ver').textContent = EmailScrub.version;
+  var ROLE_LABELS = ['Client', 'Boss', 'Vendor', 'My company'], CUSTOM = 3, last = null, acknowledged = false;
+  function addRow(label, fixed) {
+    var lab;
+    if (fixed) { lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = label; lab.dataset.label = label; }
+    else { lab = document.createElement('input'); lab.type = 'text'; lab.className = 'labin'; lab.placeholder = 'Your label'; lab.setAttribute('aria-label', 'Role label'); }
+    var names = document.createElement('input'); names.type = 'text'; names.className = 'names'; names.autocomplete = 'off';
+    names.setAttribute('aria-label', (label || 'Custom role') + ' names');
+    $('roles').appendChild(lab); $('roles').appendChild(names);
+  }
+  ROLE_LABELS.forEach(function (l) { addRow(l, true); });
+  for (var i = 0; i < CUSTOM; i++) addRow('', false);
+
+  function roles() {
+    var out = [], kids = $('roles').children;
+    for (var i = 0; i < kids.length; i += 2) {
+      var label = kids[i].dataset.label || kids[i].value.trim(), names = kids[i + 1].value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (names.length) out.push({ label: label || 'Role ' + (i / 2 + 1), names: names });
+    }
+    return out;
+  }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function paint(text) { $('out').innerHTML = esc(text).replace(/&lt;[A-Z][A-Z0-9-]*&gt;|\[Confidentiality notice removed\]/g, function (t) { return '<span class="t">' + t + '</span>'; }); }
+
+  function run() {
+    var text = $('input').value;
+    if (!text.trim()) { $('input').focus(); return; }
+    last = EmailScrub.scrub(text, { roles: roles(), kill: $('kill').value.split('\n'), note: $('note').checked });
+    acknowledged = false;
+    paint(last.text);
+    var c = last.counts, chips = [
+      ['people', last.people.length], ['names replaced', c.names + c.roles], ['emails', c.emails], ['phones', c.phones], ['dates', c.dates],
+      ['addresses', c.addresses + c.postal], ['ID numbers', c.ids], ['links', c.urls], ['your terms', c.terms], ['notices removed', c.disclaimers]];
+    $('counts').textContent = '';
+    chips.forEach(function (x) { if (x[1]) { var s = document.createElement('span'); s.className = 'chip'; s.textContent = x[1] + ' ' + x[0]; $('counts').appendChild(s); } });
+    $('people').textContent = '';
+    var shown = last.people.concat(last.roles.filter(function (r) { return !last.people.some(function (p) { return p.token === r.token; }); }).map(function (r) { return { token: r.token, names: r.names.join(', '), sources: ['you'] }; }));
+    shown.concat(last.terms.map(function (t) { return { token: t.token, names: t.text, sources: ['you'] }; })).forEach(function (p) {
+      var li = document.createElement('li'), code = document.createElement('code'); code.textContent = p.token;
+      li.appendChild(code); li.appendChild(document.createTextNode(' = ' + p.names + ' (' + p.sources.join(', ') + ')')); $('people').appendChild(li);
+    });
+    $('people-sum').textContent = 'What was replaced (' + shown.length + (last.terms.length ? ' + ' + last.terms.length + ' terms' : '') + '): stays on this page';
+    check();
+    $('res').hidden = false; $('copied').textContent = '';
+    $('res').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function check() {
+    var box = $('leak'); box.textContent = ''; box.className = '';
+    if (last.leaks.length && !acknowledged) {
+      box.className = 'alarm';
+      box.appendChild(document.createTextNode('Still in the text: ' + last.leaks.join(', ') + '. Add them to "Always remove" and scrub again. '));
+      var b = document.createElement('button'); b.textContent = 'I checked: copy anyway'; b.onclick = function () { acknowledged = true; check(); }; box.appendChild(b);
+      $('copy').disabled = true;
+    } else {
+      $('copy').disabled = false;
+      var p = document.createElement('p'); p.className = 'status ' + (last.warnings.length ? 'warn' : 'ok'); p.style.margin = '0 0 10px';
+      p.textContent = last.warnings.length ? 'Check before copying: ' + last.warnings.join(' ') : 'Leak check passed. Read it over once before you send it anywhere.';
+      box.appendChild(p);
+    }
+  }
+  $('go').onclick = run;
+  $('input').addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
+  $('file').onchange = function () {
+    var f = $('file').files[0]; if (!f) return;
+    f.text().then(function (t) { $('input').value = t; $('file').value = ''; });
+  };
+  $('clear').onclick = function () {
+    $('input').value = ''; $('kill').value = '';
+    Array.prototype.forEach.call($('roles').querySelectorAll('input'), function (i) { i.value = ''; });
+    last = null; $('out').textContent = ''; $('people').textContent = ''; $('res').hidden = true; $('input').focus();
+  };
+  $('copy').onclick = function () {
+    if (!last) return;
+    var text = last.text, done = function (ok) { $('copied').textContent = ok ? 'Copied.' : 'Copy was blocked: select the text above and press Ctrl+C.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback); else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); done(ok);
+    }
+  };
+})();
+</script>
+</body></html>
