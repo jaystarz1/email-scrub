@@ -76,7 +76,7 @@ test('privacy and inline deliverable constraints', () => {
   const html=fs.readFileSync('email-scrub.html','utf8'), oldCsp="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'";
   assert(html.includes(oldCsp)); assert(!/<(?:script|link)[^>]+(?:src|href)=/i.test(html));
   assert(!/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/.test(html));
-  assert.equal(E.version,'0.5.0'); assert(html.includes("version: '0.5.0'"));
+  assert.equal(E.version,'0.6.0'); assert(html.includes("version: '0.6.0'"));
   assert.equal((html.match(/popovertarget=/g)||[]).length,7); assert(html.includes('<dialog'));
 });
 console.log(`PASS v0.3: ${checks} acceptance groups`);

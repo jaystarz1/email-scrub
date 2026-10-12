@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Nettoyeur de fils de courriels"
+  },
+  "extDescription": {
+    "message": "Retirez noms, coordonnées, adresses, dates et identifiants d'un fil de courriels avant de le coller dans un outil d'IA. Hors ligne."
+  },
+  "actionTitle": {
+    "message": "Ouvrir le Nettoyeur de fils de courriels"
+  },
+  "menuScrub": {
+    "message": "Nettoyer le texte sélectionné"
+  }
+}

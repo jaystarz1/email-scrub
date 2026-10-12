@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Email Thread Scrubber"
+  },
+  "extDescription": {
+    "message": "Strip names, contact details, addresses, dates and IDs from an email thread before you paste it into an AI tool. Works offline."
+  },
+  "actionTitle": {
+    "message": "Open Email Thread Scrubber"
+  },
+  "menuScrub": {
+    "message": "Scrub selected text"
+  }
+}

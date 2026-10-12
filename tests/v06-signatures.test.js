@@ -1,0 +1,12 @@
+const assert = require('node:assert/strict');
+const E = require('../src/engine.js');
+const input = 'Regards,\nMira Quill\nCoordinator / Coordonnatrice\n\nFictional Office\n613-555-0100\n\nFrom: Nolan Vale\nThis prose has a full sentence.';
+const out = E.scrub(input, {note:false, signatures:true});
+assert.equal(out.counts.signatures, 1);
+assert.match(out.text, /Regards,\n<PERSON-1>\n<SIGNATURE>\nFrom:/);
+assert(!out.text.includes('Coordinator'));
+assert.equal(E.scrub('Thanks,\nMira Quill\nFrom: Nolan Vale', {note:false, signatures:true}).counts.signatures, 0);
+assert.match(E.scrub('Merci,\nMira Quill\nThis sentence should stay because it contains more than twelve words and belongs to the actual message body', {note:false, signatures:true}).text, /This sentence/);
+assert.match(E.scrub('-- \nDr. Fiction Ltd.\nUnit 7\nFrom: Nolan Vale', {note:false, signatures:true}).text, /^<SIGNATURE>\nFrom:/);
+assert.equal(E.scrub(input,{note:false,signatures:false}).counts.signatures, 0);
+console.log('PASS v06 signatures');

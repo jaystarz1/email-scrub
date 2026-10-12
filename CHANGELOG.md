@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 (2026-10-08) — local review build; French not approved for release
+
+- P: optional editable prompts beside Accept/Copy, thirteen presets, localized response-language/tone/length modifiers; None copies the scrubbed thread alone. Presets do not invalidate acceptance. Prompt edits are never saved.
+- S: default-on, remembered bilingual signature-block removal before name/ID review; sign-off/name retained, one SIGNATURE token per removed block, count chip and opt-out.
+- F: local TXT/EML picker and drop, safe explicit single-file handling, RFC2047/QP/base64 decoding, nested MIME/plain-first/HTML fallback, UTF-8/Latin-1/Windows-1252, HTML entities, attachment-content exclusion and filename review. Approximate copied-payload size and long-thread warning; no upgrade marketing.
+- L: top-right EN/FR button, browser-language default and persisted override, compiled centralized UI tables including help, review controls, warnings, demo and prompts; live popover/dialog switching. English placeholder tokens are unchanged.
+- U: in-memory review Undo, output-only Ctrl/Cmd+Z, saved exclusion restoration with monotonic IDs, acceptance reset for text changes, history cleared on input/file/demo/Clear.
+- N: v4 preferences with write-before-delete migration, language/signature retention on Forget and explicit preset reset to None. No thread/result/prompt-edit/history storage.
+- Original offline CSP retained byte-for-byte; Node engine remains dependency-free. Static entity data is compiled locally from Python's standard library, not a runtime library.
+- Validation: legacy suites run through the documented version/preferences/signature/confirmation adapter; new Node tests and installed Chrome/Edge/Firefox file:// automation pass. Human checklist and two real-thread signature reruns remain unperformed/unavailable. See tests/V06-CHECKLIST.md and docs/FRENCH-REVIEW-V06.md.
+
 ## 0.5.0 (2026-10-07)
 
 - I1: Checksum-validated IBAN and VIN replacements, Canadian bank account groups, IPv4/IPv6, MAC, GPS coordinates and social handles. Replaced values enter originals/secrets for leak checking. IPv4 version/partial/out-of-range values are guarded.

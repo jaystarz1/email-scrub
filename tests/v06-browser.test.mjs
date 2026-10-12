@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const pw=await import('/Users/jaytarzwell/claude-code-resources/node_modules/playwright/index.mjs');
+const channel=process.env.BROWSER_CHANNEL||'chrome';const browser=await pw.chromium.launch({channel});
+const ctx=await browser.newContext({locale:'en-CA'});await ctx.grantPermissions(['clipboard-read','clipboard-write']);
+const page=await ctx.newPage(),errors=[],network=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!/^(file|data|blob):/.test(r.url()))network.push(r.url());});
+const pref=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('email-scrub.preferences.v4')));
+async function scrub(text){await page.fill('#input',text);await page.click('#go');}
+const clean=()=>page.locator('#out').evaluate(e=>{const c=e.cloneNode(true);c.querySelectorAll('.sr-only,.review-controls').forEach(n=>n.remove());return c.textContent;});
+try{
+await page.goto('file://'+new URL('../email-scrub.html',import.meta.url).pathname);
+assert(await page.isVisible('#language-toggle'));assert(await page.isChecked('#signatures'));
+await page.uncheck('#note');await scrub('R10 843 221');await page.click('#copy');assert.equal(await page.textContent('#copy'),'Copy');
+await page.selectOption('#prompt-preset','reply-short');await page.selectOption('#prompt-tone','formal');await page.fill('#prompt-edit','edited copy');assert.equal(await page.textContent('#copy'),'Copy');await page.click('#copy');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/^edited copy\nUse a formal tone\.\nRespond in English\.\n\n--- EMAIL THREAD START ---/);
+await page.selectOption('#prompt-preset','summary');assert.match(await page.inputValue('#prompt-edit'),/^Summarise/);assert(await page.isHidden('#tone-control'));
+await page.click('[popovertarget="help-prompt"]');await page.click('#language-toggle');assert(await page.locator('#help-prompt').evaluate(e=>e.matches(':popover-open')));assert.match(await page.textContent('#help-prompt'),/^Choisissez/);assert.equal(await page.textContent('#copy'),'Copier');assert.equal((await pref()).lang,'fr');await page.keyboard.press('Escape');await page.click('#language-toggle');
+await page.selectOption('#prompt-preset','none');await scrub('A1234-56789-01234');assert(await page.isDisabled('#undo'));await page.getByRole('button',{name:'Replace A1234-56789-01234',exact:true}).click();assert.match(await clean(),/<EXCLUDED-1>/);await page.click('#undo');assert.equal(await page.locator('.review').count(),1);
+await page.getByRole('button',{name:'Always remove A1234-56789-01234',exact:true}).click();const counter=(await pref()).nextExcluded;await page.locator('#out').focus();await page.keyboard.press('Control+z');assert.equal((await pref()).excluded.length,0);assert.equal((await pref()).nextExcluded,counter);assert.equal(await page.locator('.review').count(),1);
+await page.getByRole('button',{name:'Keep A1234-56789-01234',exact:true}).click();assert.equal(await page.locator('.review').count(),0);await page.click('#undo');assert.equal(await page.locator('.review').count(),1);await page.click('#clear');assert(await page.isDisabled('#undo'));
+await page.setInputFiles('#file',{name:'synthetic.eml',mimeType:'message/rfc822',buffer:Buffer.from('From: Mira Quill\nSubject: example\n\nHello world')});await page.waitForFunction(()=>document.getElementById('input').value.includes('Subject: example'));assert(await page.isHidden('#res'));
+await page.setInputFiles('#file',{name:'bad.pdf',mimeType:'application/pdf',buffer:Buffer.from('DO NOT LOAD')});assert(!(await page.inputValue('#input')).includes('DO NOT LOAD'));assert.match(await page.textContent('#file-status'),/can't be opened/);
+await scrub('Regards,\nMira Quill\nCoordinator\n613-555-0100\nFrom: Nolan Vale\nHello.');assert.match(await clean(),/<SIGNATURE>/);assert.match(await page.textContent('#counts'),/1 signatures removed/);
+await scrub('a'.repeat(100404));assert(await page.isVisible('#long-warning'));await page.selectOption('#prompt-preset','summary');const withPrompt=await page.textContent('#size');await page.selectOption('#prompt-preset','none');assert.notEqual(await page.textContent('#size'),withPrompt);
+assert(!JSON.stringify(await pref()).includes('Hello world'));assert.equal(await page.evaluate(()=>sessionStorage.length),0);assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
+await page.reload();assert.equal(await page.inputValue('#input'),'');assert.equal((await pref()).lang,'en');assert(await page.isChecked('#signatures'));
+await page.click('#add-person');await page.fill('#roles .names','Mira Quill');await page.click('#language-toggle');assert.notEqual(await page.getAttribute('#roles .names','placeholder'),'Name, alternate name');assert.equal(await page.inputValue('#roles .names'),'Mira Quill');await page.click('#language-toggle');
+// Browser migration uses v3 and removes it only after v4 write succeeds.
+await page.evaluate(()=>{localStorage.removeItem('email-scrub.preferences.v4');localStorage.setItem('email-scrub.preferences.v3',JSON.stringify({me:'Mira',saved:[],kill:'Project',excluded:[{text:'secret',n:4}],nextExcluded:8}));});await page.reload();assert.equal((await pref()).me,'Mira');assert.equal((await pref()).nextExcluded,8);assert.equal(await page.evaluate(()=>localStorage.getItem('email-scrub.preferences.v3')),null);
+await page.evaluate(()=>{localStorage.removeItem('email-scrub.preferences.v4');localStorage.setItem('email-scrub.preferences.v3',JSON.stringify({me:'Mira',saved:[],kill:'Project',excluded:[],nextExcluded:8}));});await page.addInitScript(()=>{const set=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='email-scrub.preferences.v4')throw new Error('synthetic write failure');return set.call(this,k,v);};});await page.reload();assert(await page.evaluate(()=>localStorage.getItem('email-scrub.preferences.v3')));assert.equal(await page.evaluate(()=>localStorage.getItem('email-scrub.preferences.v4')),null);
+console.log('PASS '+channel+' '+browser.version()+' v06 prompts, clipboard, localization/open popover/people row, signatures, undo, files, counters, migration/write failure safe preservation, no storage/network/errors');
+}finally{await browser.close();}

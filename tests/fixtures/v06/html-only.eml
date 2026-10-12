@@ -1,0 +1,4 @@
+Subject: Fictional HTML
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Bonjour &amp; merci.</p><div>Caf&eacute;<br>Suite &#233; &#xE8;</div><script>never execute</script><img src="https://example.com/no-fetch"></body></html>

@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict');
+const V=require('../src/v06.js');
+assert.equal(V.assemble('thread','none','ignored',{}),'thread');
+assert.equal(V.assemble('thread','reply-short','edited',{tone:'formal',language:'en'}),'edited\nUse a formal tone.\nRespond in English.\n\n--- EMAIL THREAD START ---\nthread\n--- EMAIL THREAD END ---\nKeep every placeholder, such as <PERSON-1> or <ME>, exactly as written.');
+assert.equal(V.presets.en.summary,'Summarise this email thread: what it is about, where it stands now, and what, if anything, is being asked of <ME>.');
+assert.equal(Object.keys(V.presets.en).length,13);
+assert.equal(Object.keys(V.presets.fr).length,13);
+assert.equal(V.size('a'.repeat(100004)).tokens,25000);
+assert.equal(V.size('a'.repeat(100404)).long,true);
+const E=require('../src/engine.js');
+const p=V.preferences(E.emptyPreferences(),'fr-CA');assert.equal(p.lang,'fr');assert.equal(p.signatures,true);assert.equal(p.lastPreset,'none');
+const migrated=V.preferences({me:'Mira',saved:[],kill:'Project',excluded:[{text:'secret',n:4}],nextExcluded:8},'en');assert.equal(migrated.nextExcluded,8);assert.equal(migrated.me,'Mira');
+assert.equal(V.preferences({...migrated,lang:'fr',signatures:false,lastPreset:'summary'},'en').lang,'fr');
+assert.equal(V.parseEML('From: Mira\r\nSubject: =?UTF-8?B?Qm9uam91cg==?=\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nhello'),'From: Mira\nSubject: Bonjour\n\nhello');
+assert.equal(V.parseEML('Content-Type: text/plain; charset=iso-8859-1\nContent-Transfer-Encoding: quoted-printable\n\nCaf=E9'), 'Café');
+assert.equal(V.parseEML('Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: base64\n\naGVsbG8='),'hello');
+assert.equal(V.parseEML('Content-Type: text/html\n\n<p>Hello &amp; goodbye</p><div>next<br>line</div>'),'Hello & goodbye\nnext\nline');
+console.log('PASS v06 prompt/size/preferences/MIME');

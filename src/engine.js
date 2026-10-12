@@ -40,7 +40,7 @@
   function isNameWord(w) { return /^\p{Lu}[\p{L}'’-]*$/u.test(w) && w.replace(/[^\p{L}]/gu, '').length >= 2; }
 
   // ---------- patterns ----------
-  var EMAIL = /[\p{L}\p{N}._%+'’-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu;
+  var EMAIL = /(?<![\p{L}\p{N}._%+'’-])[\p{L}\p{N}._%+'’-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu;
   var URL = /\b(?:https?:\/\/|www\.)[^\s<>"')\]]+/gi;
   var PHONE = /(?<![\p{L}\p{N}.])(?:\+?1[ .-]?)?(?:\(\d{3}\)\s?|\d{3}[ .-])\d{3}[ .-]\d{4}(?:\s*(?:x|ext\.?|extension|poste|#)\s*\d{1,6})?(?![\p{N}])|(?<![\p{L}\p{N}])\+(?:[2-9]\d{0,2})(?:[ .-]?\(?\d{1,4}\)?){2,5}(?![\p{N}])/giu;
   var POSTAL_CA = /(?<![\p{L}\p{N}])[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d(?![\p{L}\p{N}])/giu;
@@ -90,10 +90,11 @@
       var m;
       while ((m = re.exec(masked))) {
         var start = m.index, end = start + m[0].length;
-        if (keep.has(fold(m[0])) || valid && !valid(m, masked) || protectedRanges.some(function (r) { return start < r[1] && end > r[0]; }) || found.some(function (f) { return start < f.end && end > f.start; })) continue;
+        if (keep.has(fold(m[0])) || valid && !valid(m, masked) || kind !== 'file' && protectedRanges.some(function (r) { return start < r[1] && end > r[0]; }) || found.some(function (f) { return start < f.end && end > f.start; })) continue;
         found.push({ id: kind + '-' + start + '-' + end, kind: kind, text: text.slice(start, end), start: start, end: end });
       }
     }
+    collect('file', /(?<=^Attachment: )[\S][^\n]*/gm, function(m){return !/^\s*$/.test(m[0]);});
     collect('file', /(?<![\p{L}\p{N}_])[\p{L}\p{N}_.'’-]+\.(?:pdf|docx?|xlsx?|pptx|msg|eml|txt|jpg|png|zip)\b/giu);
     collect('age', /(?<![\p{L}\p{N}])(?:\d{1,3}-year-old|aged[ \t]+\d{1,3}|age[ \t]+\d{1,3}|âgé(?:e)?[ \t]+de[ \t]+\d{1,3}[ \t]+ans|\d{1,3}[ \t]+ans)(?![\p{L}\p{N}])/giu);
     collect('url', /\b(?:linkedin\.com\/in|facebook\.com|instagram\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/gi);
@@ -156,11 +157,55 @@
     return { first: words[0], last: words[words.length - 1], middle: words.slice(1, -1) };
   }
 
+  function removeSignatures(text) {
+    var lines = text.split('\n'), result = [], count = 0;
+    function bare(line) { return line.replace(/^[ \t>]+/, '').trim(); }
+    function header(line) { return /^(?:(?:From|De|To|À|A|Cc|Cci|Sent|Envoyé|Date|Subject|Objet|Attachment)\s*:|-+\s*(?:Original Message|Forwarded message|Message d'origine)|On .+ wrote:|Le .+ a écrit\s*:)/i.test(bare(line)); }
+    function signature(line) {
+      var s = bare(line);
+      return !header(line) && s.split(/\s+/).length <= 12 && !/[.!?]\s*$/.test(s.replace(/\b(?:Ltd|Dr|Mr|Mrs|Ms|M|Mme|Inc|ext)\./gi, ''));
+    }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i], start = -1;
+      if (/^[ \t>]*-- ?$/.test(line)) start = i + 1;
+      else {
+        SIGNOFF.lastIndex = 0;
+        var sign = SIGNOFF.exec(line);
+        if (sign) {
+          result.push(line);
+          if (!sign[1].trim()) {
+            while (i + 1 < lines.length && !bare(lines[i + 1])) result.push(lines[++i]);
+            if (i + 1 < lines.length && parseName(bare(lines[i + 1])) && !header(lines[i + 1])) result.push(lines[++i]);
+            else continue;
+          }
+          start = i + 1;
+        }
+      }
+      if (start < 0) { result.push(line); continue; }
+      var end = start;
+      while (end < lines.length && signature(lines[end])) end++;
+      if (lines.slice(start, end).some(function (s) { return bare(s); })) {
+        result.push('<SIGNATURE>'); count++; i = end - 1;
+      } else if (/^[ \t>]*-- ?$/.test(line)) result.push(line);
+    }
+    return { text: result.join('\n'), count: count };
+  }
   function scrub(input, opts) {
     opts = opts || {};
     var text = String(input || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ');
     var counts = { emails: 0, phones: 0, dates: 0, addresses: 0, postal: 0, urls: 0, ids: 0, names: 0, terms: 0, roles: 0, disclaimers: 0 };
+    var signatureResult = opts.signatures ? removeSignatures(text) : { text: text, count: 0 };
+    text = signatureResult.text; counts.signatures = signatureResult.count;
     var warnings = [], originals = [], decorations = new Map();
+    // Attachment filenames are review-only, not prose identities. Protect them
+    // from name inference, but honour explicit exclusion/Always remove rules.
+    var attachmentNames=[];
+    text=text.replace(/^(Attachment: )(.+)$/gm,function(whole,label,name){
+      var value=name;
+      (opts.excluded||[]).forEach(function(term,i){var item=typeof term==='string'?{text:term,n:i+1}:term;if(item.text)value=outside(value,new RegExp(termPattern(item.text),'giu'),function(){counts.terms++;return '<EXCLUDED-'+item.n+'>';});});
+      (opts.kill||[]).forEach(function(term,i){if(String(term).trim())value=outside(value,new RegExp(termPattern(String(term)),'giu'),function(){counts.terms++;return '<TERM-'+(i+1)+'>';});});
+      attachmentNames.push(value);return label+'<FILE-REVIEW-'+attachmentNames.length+'>';
+    });
     // Header decorations are generic display metadata, never separate people.
     HEADER.lastIndex = 0;
     text = text.replace(HEADER, function (whole, label, value) {
@@ -432,6 +477,7 @@
       });
     });
 
+    text=text.replace(/<FILE-REVIEW-(\d+)>/g,function(_,n){return attachmentNames[+n-1];});
     // Nonblocking review candidates, outside placeholders and before the AI note.
     var possibleNames = [], candidateSeen = new Set();
     function candidate(name) { if (!candidateSeen.has(fold(name))) { candidateSeen.add(fold(name)); possibleNames.push(name); } }
@@ -635,6 +681,6 @@ CONFIDENTIALITY NOTICE: This message is confidential. If you are not the intende
     return { label: 'Copy', accept: false, red: false };
   }
   function reviewSignature(result) { return JSON.stringify([result.text, result.flags.map(function (f) { return [f.kind,f.start,f.end,f.text]; }), result.leaks]); }
-  var api = { leakRanges: leakRanges, reviewState: reviewState, reviewSignature: reviewSignature, reviewFlags: reviewFlags, ibanOK: ibanOK, vinOK: vinOK, ipv6OK: ipv6OK, sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.5.0' };
+  var api = { leakRanges: leakRanges, reviewState: reviewState, reviewSignature: reviewSignature, reviewFlags: reviewFlags, ibanOK: ibanOK, vinOK: vinOK, ipv6OK: ipv6OK, sample: SAMPLE, migratePreferences: migratePreferences, emptyPreferences: emptyPreferences, sanitizeLabel: sanitizeLabel, savePerson: savePerson, updateLastUsed: updateLastUsed, searchSaved: searchSaved, migrationNotice: migrationNotice, clearThread: clearThread, forgetPreferences: forgetPreferences, demoControls: demoControls, scrub: scrub, leakCheck: leakCheck, fold: fold, version: '0.6.0' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.EmailScrub = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

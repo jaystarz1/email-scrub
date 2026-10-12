@@ -40,7 +40,7 @@ test('T2 symbolic group mailboxes, generic display strings and decorated people'
  assert.equal(run('Cc: Smith, John@Dept@City <john@example.com>').text,'Cc: <PERSON-1> <ORG-1> <EMAIL>');
 });
 test('H1/H2 UI structure, privacy constraints, controls, demo and version',()=>{
- const html=fs.readFileSync('email-scrub.html','utf8');assert.equal(E.version,'0.5.0');assert(!html.includes('I checked: copy anyway'));assert(!html.includes('Remove possible name'));
+ const html=fs.readFileSync('email-scrub.html','utf8');assert.equal(E.version,'0.6.0');assert(!html.includes('I checked: copy anyway'));assert(!html.includes('Remove possible name'));
  for(const id of ['review-panel','review-counter','review-next','help-review','help-copy'])assert(html.includes('id="'+id+'"'));
  assert(html.includes('user-select:none'));assert(html.includes("setAttribute('aria-label','Replace '+r.text)"));assert(html.includes("setAttribute('aria-label','Keep '+r.text)"));assert(html.includes('sr-only'));
  for(const phrase of ['What is caught automatically','What is flagged for you','What is not reliably caught','Reviewing the result','Preferences'])assert(html.includes(phrase));

@@ -1,12 +1,29 @@
 meta:
-  last_updated: '2026-10-07'
+  last_updated: '2026-10-10'
   purpose: Offline Email Thread Scrubber continuity
 current_state:
-  active_task: Email Thread Scrubber 0.2.0 usability update
+  active_task: Browser extension packaging of the v0.6 scrubber
   status: complete
-  next_action: Jay testing; commercial funnel remains recommendation only.
-  summary: Added selection-based removal in Check and copy, remembered local exclusions and people, expandable rows with ten role choices and custom titles, and separate clear/forget controls. Chrome and engine checks pass with zero network requests; threads and output are never persisted. Commercial recommendation saved in second-brain, with no collection, upgrade prompt or billing implementation.
-pending_tasks: []
+  next_action: Jay load-tests the unpacked extension in his own Chrome/Edge/Firefox (real right-click on Outlook/Gmail);
+    store listings, AMO signing and Safari (needs Xcode) not started. v0.6 source and extension/ still uncommitted.
+  summary: extension/build_extension.py packages email-scrub.html into Chromium and Firefox MV3 zips with a
+    right-click "Scrub selected text" entry; automated tests pass in Playwright Chromium, installed Edge and
+    headless Firefox 157; web-ext lint clean.
+pending_tasks:
+- task: Commit v0.6 source plus extension/ (both uncommitted) once Jay approves v0.6
+  priority: medium
 session_history:
-  - date: '2026-10-07'
-    summary: Built and verified 0.2.0 with highlight removal, local preferences and expandable people; researched paid support without implementing it.
+- date: '2026-10-10'
+  summary: Built Chromium/Firefox MV3 extension packages with right-click scrub; Chromium, Edge, Firefox automation and web-ext lint pass.
+- date: '2026-10-07'
+  summary: Implemented/tested/pushed Scrubber 0.5.0; verified two HTML attachment
+    bytes; landing page and terms/privacy remain undeployed drafts.
+- date: '2026-10-07'
+  summary: Implemented/tested/pushed Scrubber 0.4.0; verified Barker HTML and personal-Gmail
+    Git link delivery; actual test thread unavailable.
+- date: '2026-10-07'
+  summary: Implemented/tested Scrubber 0.3.0 and verified Barker-account HTML attachment
+    delivery; clarification hold resolved, deferred features untouched.
+- date: '2026-10-07'
+  summary: Built and verified 0.2.0 with highlight removal, local preferences and
+    expandable people; researched paid support without implementing it.

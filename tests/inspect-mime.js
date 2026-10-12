@@ -1,0 +1,1 @@
+const V=require('../src/v06.js');const fs=require('node:fs');console.log(JSON.stringify(V.parseEML(fs.readFileSync('tests/fixtures/v06/attachment-nested.eml','utf8'))));console.log([...new TextDecoder('windows-1252').decode(Uint8Array.of(0x93,0x94))].map(x=>x.codePointAt(0)));
