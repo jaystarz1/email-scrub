@@ -7,7 +7,7 @@ Copy-paste source for the developer dashboard. Upload `../dist/email-scrub-chrom
 
 - **Name:** comes from the manifest (`Email Thread Scrubber`; French locale included)
 - **Summary (127/132 chars):** from the manifest: Strip names, contact details, addresses, dates and IDs from an email thread before you paste it into an AI tool. Works offline.
-- **Category:** Productivity > Tools
+- **Category:** Privacy & Security (used in the 2026-10-12 submission)
 - **Language:** English (French locale ships in the package)
 - **Store icon:** 128x128, already in the package (`icons/icon-128.png`)
 - **Screenshots (1280x800):** `screenshot-1-before-after.png`, `screenshot-2-review.png`, `screenshot-3-start.png`
